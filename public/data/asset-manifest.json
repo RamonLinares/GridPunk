@@ -45,8 +45,8 @@
     },
     {
       "file": "public/cars/shinsei/shinsei-nd01.glb",
-      "bytes": 7455300,
-      "sha256": "e38901ac68e703d8b82b4ac9cdbf4187ff683797242a453491faeb202d493329",
+      "bytes": 7655584,
+      "sha256": "4e979fe26e40dc8c9f495f980b52d61a58ad1edd352b87a23cc35e7c9dee9b5d",
       "source": "Owner-authored jev3d Blender car and decals; baked and rigged for Gridbound"
     },
     {

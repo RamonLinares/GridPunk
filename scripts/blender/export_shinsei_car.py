@@ -39,10 +39,12 @@ def wing_material(name, color, roughness, metallic):
 
 wing_paint = wing_material('Shinsei_WingPaint', (.30, .012, .020), .48, .12)
 wing_graphite = wing_material('Shinsei_WingGraphite', (.035, .040, .045), .65, .05)
+wing_worn = materials['crimson'].copy()
+wing_worn.name = 'Shinsei_WingWornCrimsonSource'
 for name in ('wing_main', 'wing_flap', 'wing_beam', 'wing_endplate_left', 'wing_endplate_right'):
     obj = bpy.data.objects[name]
     obj.data.materials.clear()
-    obj.data.materials.append(wing_graphite if name in ('wing_flap', 'wing_beam') else wing_paint)
+    obj.data.materials.append(wing_worn if name == 'wing_flap' else wing_graphite if name == 'wing_beam' else wing_paint)
     obj['game_surface'] = True
 
 # The presentation model has a solid tub underneath its smoked canopy. Cut a
@@ -115,18 +117,22 @@ scene.render.bake.margin = 4
 scene.render.bake.use_clear = True
 
 # Bake the Blender graph, rather than losing its grime/chips/droplets on export.
-graphs = []
-for mat in atlas.data.materials:
-    nt = mat.node_tree
-    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
-    output = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
-    target = nt.nodes.new('ShaderNodeTexImage')
-    nt.nodes.active = target
-    emission = nt.nodes.new('ShaderNodeEmission')
-    graphs.append((nt, bsdf, output, target, emission))
+def bake_graphs(materials):
+    graphs = []
+    for mat in materials:
+        nt = mat.node_tree
+        bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+        output = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
+        target = nt.nodes.new('ShaderNodeTexImage')
+        nt.nodes.active = target
+        emission = nt.nodes.new('ShaderNodeEmission')
+        graphs.append((nt, bsdf, output, target, emission))
+    return graphs
 
-def bake(channel, size, color_space):
-    image = bpy.data.images.new('shinsei_' + channel, width=size, height=size)
+graphs = bake_graphs(atlas.data.materials)
+
+def bake(channel, size, color_space, prefix='shinsei'):
+    image = bpy.data.images.new(prefix + '_' + channel, width=size, height=size)
     image.colorspace_settings.name = color_space
     for nt, bsdf, output, target, emission in graphs:
         target.image = image
@@ -150,7 +156,7 @@ def bake(channel, size, color_space):
             nt.links.new(combine.outputs[0], emission.inputs['Color'])
         nt.links.new(emission.outputs[0], output.inputs['Surface'])
     bpy.ops.object.bake(type='NORMAL' if channel == 'normal' else 'EMIT')
-    image.filepath_raw = str(SOURCE / ('shinsei_' + channel + '.png'))
+    image.filepath_raw = str(SOURCE / (prefix + '_' + channel + '.png'))
     image.file_format = 'PNG'
     image.save()
     print('BAKED', channel, flush=True)
@@ -177,6 +183,26 @@ nt.links.new(texture.outputs['Color'], bump.inputs['Color'])
 nt.links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
 bsdf.inputs['Coat Weight'].default_value = .28
 bsdf.inputs['Coat Roughness'].default_value = .25
+
+# Give the top flap the body's aged crimson paint, with its own texture budget
+# so grime and scratches remain sharp in the close camera. Keep surface relief
+# subtle by using geometric normals rather than the noisy whole-car normal map.
+flap = bpy.data.objects['wing_flap']
+bpy.ops.object.select_all(action='DESELECT')
+flap.select_set(True)
+bpy.context.view_layer.objects.active = flap
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.uv.smart_project(angle_limit=1.05, island_margin=.015)
+bpy.ops.object.mode_set(mode='OBJECT')
+graphs = bake_graphs(flap.data.materials)
+flap_color = bake('color', 1024, 'sRGB', 'shinsei_wing')
+flap_finish = wing_material('Shinsei_WingWornCrimson', (1, 1, 1), .55, .12)
+texture = flap_finish.node_tree.nodes.new('ShaderNodeTexImage')
+texture.image = flap_color
+flap_finish.node_tree.links.new(texture.outputs['Color'], flap_finish.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
+flap.data.materials.clear()
+flap.data.materials.append(flap_finish)
 
 # Split the atlas back into rigid game parts without changing any baked UVs.
 parts = []
@@ -242,7 +268,7 @@ for o in parts:
     o.data.calc_loop_triangles(); triangles += len(o.data.loop_triangles)
 report = {'triangles': triangles, 'meshes': len(parts), 'bytes': (OUT/'shinsei-nd01.glb').stat().st_size,
     'source': 'assets/shinsei-source/blender/lib_car.py', 'bake': '2048 color/normal, 1024 metallic-roughness',
-    'rear_wing': 'Dedicated crimson and matte graphite PBR surfaces; clean endplate edges; animated flap pivot retained',
+    'rear_wing': 'Aged crimson top flap with dedicated 1024 color bake; clean endplate edges; animated flap pivot retained',
     'wheels': {key: {'radius': .33 if key[0]=='f' else .35, 'width': .31 if key[0]=='f' else .40} for key in ('fl','fr','rl','rr')}}
 (OUT / 'shinsei-nd01.json').write_text(json.dumps(report, indent=2))
 print('SHINSEI_REPORT', json.dumps(report), flush=True)

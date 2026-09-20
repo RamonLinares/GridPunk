@@ -6,7 +6,7 @@ import type { CarModel } from './CarModel';
 let source: THREE.Group | undefined;
 let pending: Promise<void> | undefined;
 export function preloadShinseiCarModel(): Promise<void> {
-  return pending ??= new GLTFLoader().loadAsync('/cars/shinsei/shinsei-nd01.glb?v=clean-rear-wing')
+  return pending ??= new GLTFLoader().loadAsync('/cars/shinsei/shinsei-nd01.glb?v=worn-red-wing')
     .then(asset => { source = asset.scene; })
     .catch(error => { pending = undefined; throw error; });
 }

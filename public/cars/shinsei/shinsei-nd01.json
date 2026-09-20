@@ -1,10 +1,10 @@
 {
   "triangles": 57968,
   "meshes": 36,
-  "bytes": 7455300,
+  "bytes": 7655584,
   "source": "assets/shinsei-source/blender/lib_car.py",
   "bake": "2048 color/normal, 1024 metallic-roughness",
-  "rear_wing": "Dedicated crimson and matte graphite PBR surfaces; clean endplate edges; animated flap pivot retained",
+  "rear_wing": "Aged crimson top flap with dedicated 1024 color bake; clean endplate edges; animated flap pivot retained",
   "wheels": {
     "fl": {
       "radius": 0.33,
