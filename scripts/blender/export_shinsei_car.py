@@ -15,6 +15,36 @@ bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
 materials = lib_materials.build_all()
 lib_car.build_car(materials)
+
+# The close chase camera exposes the presentation model's floating edge rivets
+# (their X offset points outside the endplates) and tiny bright chip cubes.
+# Keep a clean aero silhouette, with dedicated PBR finishes rather than packing
+# these large, near-camera surfaces into the whole-car weathering atlas.
+for name in ('wing_main_chips', 'wing_endplate_left_chips', 'wing_endplate_right_chips',
+             'wing_endplate_left_rivets', 'wing_endplate_right_rivets'):
+    obj = bpy.data.objects.get(name)
+    if obj:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+def wing_material(name, color, roughness, metallic):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    surface = material.node_tree.nodes.get('Principled BSDF')
+    surface.inputs['Base Color'].default_value = (*color, 1)
+    surface.inputs['Roughness'].default_value = roughness
+    surface.inputs['Metallic'].default_value = metallic
+    surface.inputs['Coat Weight'].default_value = .15
+    surface.inputs['Coat Roughness'].default_value = .35
+    return material
+
+wing_paint = wing_material('Shinsei_WingPaint', (.30, .012, .020), .48, .12)
+wing_graphite = wing_material('Shinsei_WingGraphite', (.035, .040, .045), .65, .05)
+for name in ('wing_main', 'wing_flap', 'wing_beam', 'wing_endplate_left', 'wing_endplate_right'):
+    obj = bpy.data.objects[name]
+    obj.data.materials.clear()
+    obj.data.materials.append(wing_graphite if name in ('wing_flap', 'wing_beam') else wing_paint)
+    obj['game_surface'] = True
+
 # The presentation model has a solid tub underneath its smoked canopy. Cut a
 # cockpit well for the playable driver's view without changing the silhouette.
 bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=1, depth=1.4, location=(.05, 0, .96))
@@ -62,7 +92,7 @@ for o in list(bpy.context.scene.objects):
     for slot in o.material_slots:
         if slot.material is None: slot.material = materials['black']
     mat = o.data.materials[0]
-    if mat.name.startswith('decal_') or o.get('role') in ('canopy', 'brake_light', 'status_light', 'headlamp', 'underglow') or 'emitter' in mat.get('finish', ''):
+    if o.get('game_surface') or mat.name.startswith('decal_') or o.get('role') in ('canopy', 'brake_light', 'status_light', 'headlamp', 'underglow') or 'emitter' in mat.get('finish', ''):
         other.append(o)
     else:
         opaque.append(o)
@@ -174,7 +204,8 @@ for (role, material), objects in buckets.items():
     for o in objects: o.select_set(True)
     bpy.context.view_layer.objects.active = objects[0]
     if len(objects) > 1: bpy.ops.object.join()
-    o = bpy.context.object; o.name = 'Shinsei_' + role + '_' + material
+    o = bpy.context.object
+    o.name = 'Shinsei_flap' if role == 'flap' else 'Shinsei_' + role + '_' + material
     o.vertex_groups.clear()
     parts.append(o)
 
@@ -211,6 +242,7 @@ for o in parts:
     o.data.calc_loop_triangles(); triangles += len(o.data.loop_triangles)
 report = {'triangles': triangles, 'meshes': len(parts), 'bytes': (OUT/'shinsei-nd01.glb').stat().st_size,
     'source': 'assets/shinsei-source/blender/lib_car.py', 'bake': '2048 color/normal, 1024 metallic-roughness',
+    'rear_wing': 'Dedicated crimson and matte graphite PBR surfaces; clean endplate edges; animated flap pivot retained',
     'wheels': {key: {'radius': .33 if key[0]=='f' else .35, 'width': .31 if key[0]=='f' else .40} for key in ('fl','fr','rl','rr')}}
 (OUT / 'shinsei-nd01.json').write_text(json.dumps(report, indent=2))
 print('SHINSEI_REPORT', json.dumps(report), flush=True)
