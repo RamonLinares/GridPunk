@@ -61,6 +61,9 @@ export class CameraRig {
     if (this.mode === 'hood' || this.mode === 'cockpit') this.camera.up.applyQuaternion(car.group.quaternion);
     this.keepOutsideScenery(car);
     this.camera.lookAt(this.lookAt);
+    this.fov = this.targetFov(car.physics.telemetry.speed);
+    this.camera.fov = this.fov;
+    this.camera.updateProjectionMatrix();
   }
 
   update(dt: number, car: Car): void {
@@ -86,7 +89,7 @@ export class CameraRig {
       this.camera.up.set(0, 1, 0).applyQuaternion(car.group.quaternion);
     } else {
       this.camera.up.set(0, 1, 0);
-      const lag = THREE.MathUtils.lerp(0.12, 0.05, Math.min(1, speed / 70));
+      const lag = this.mode === 'chase' ? 0.08 : THREE.MathUtils.lerp(0.12, 0.05, Math.min(1, speed / 70));
       const factor = 1 - Math.exp(-dt / lag);
       this.camera.position.lerp(this.desired, factor);
       this.smoothedLook.lerp(this.lookAt, Math.min(1, factor * 1.8));
@@ -115,7 +118,7 @@ export class CameraRig {
     this.keepOutsideScenery(car);
     this.camera.lookAt(this.smoothedLook);
 
-    const targetFov = 60 + Math.min(14, speed * 0.17) + (this.mode === 'hood' ? 6 : 0);
+    const targetFov = this.targetFov(speed);
     this.fov += (targetFov - this.fov) * Math.min(1, dt * 2.5);
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
@@ -162,14 +165,24 @@ export class CameraRig {
         break;
       }
       default: {
-        const dist = 9.2 + speed * 0.055 + this.speedTrail(speed);
-        const height = 3.7 + speed * 0.012;
+        // Close chase keeps the car's framing steady under acceleration.
+        const dist = 5.4;
+        const height = 2.2;
         this.desired.copy(p).addScaledVector(forward, -dist);
         this.desired.y = p.y + height;
-        this.lookAt.copy(p).addScaledVector(forward, 12 + speed * 0.12);
-        this.lookAt.y = p.y + 1.0;
+        this.lookAt.copy(p).addScaledVector(forward, 4);
+        this.lookAt.y = p.y + 0.5;
       }
     }
+  }
+
+  private targetFov(speed: number): number {
+    if (this.mode === 'chase') {
+      // Preserve at least a 60-degree horizontal view on portrait screens so
+      // the closer car still fits. The lens never changes with speed.
+      return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(Math.PI / 6) / Math.min(1, this.camera.aspect)));
+    }
+    return 60 + Math.min(14, speed * 0.17) + (this.mode === 'hood' ? 6 : 0);
   }
 
   /** Keep the familiar high-speed pullback without world-space follow lag. */
