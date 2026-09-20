@@ -17,8 +17,9 @@ The custom domain is configured in the GitHub Pages API/settings; the `public/CN
 - Public repository and pushed commit verified.
 - Production build passed locally and in GitHub Actions.
 - Initial deployment run `35516103857` completed successfully for commit `a95d3bc`.
+- Follow-up deployment run `35517608601` completed successfully for commit `441eb58`.
 - Cloudflare record saved and checked against authoritative DNS, Cloudflare's public resolver and Google's public resolver.
 - Published page, production JavaScript entry, and all 21 public asset/metadata checks succeeded.
 - The published game loaded its garage and started a rendered race in the browser.
 - GitHub DNS health check passed: the domain resolves, its DNS configuration is valid, and it is eligible for HTTPS.
-- HTTPS certificate provisioning started after refreshing the custom domain once DNS had propagated.
+- The HTTP site is live. GitHub's HTTPS certificate is still in `authorization_created` state as of 14:52 UTC; HTTPS enforcement remains disabled until the certificate is issued. DNS validation passes, so certificate provisioning is the remaining deployment step.
