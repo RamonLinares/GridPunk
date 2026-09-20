@@ -1,0 +1,14 @@
+[
+  {
+    "name": "tunnel-portal",
+    "triangles": 11974,
+    "meshes": 10,
+    "bytes": 884448
+  },
+  {
+    "name": "tunnel-service-bay",
+    "triangles": 4828,
+    "meshes": 7,
+    "bytes": 349764
+  }
+]

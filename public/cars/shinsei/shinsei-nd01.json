@@ -1,0 +1,25 @@
+{
+  "triangles": 64280,
+  "meshes": 34,
+  "bytes": 7594296,
+  "source": "assets/shinsei-source/blender/lib_car.py",
+  "bake": "2048 color/normal, 1024 metallic-roughness",
+  "wheels": {
+    "fl": {
+      "radius": 0.33,
+      "width": 0.31
+    },
+    "fr": {
+      "radius": 0.33,
+      "width": 0.31
+    },
+    "rl": {
+      "radius": 0.35,
+      "width": 0.4
+    },
+    "rr": {
+      "radius": 0.35,
+      "width": 0.4
+    }
+  }
+}

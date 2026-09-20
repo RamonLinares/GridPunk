@@ -1,0 +1,125 @@
+{
+  "notice": "File identity/provenance record, not legal clearance. See /credits.html.",
+  "assets": [
+    {
+      "file": "public/circuits/neon-models/exchange.glb",
+      "bytes": 2398788,
+      "sha256": "45736497dae1a87ff37a96941fec1c3337769fab62574d65ed21df9e2984e610",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/circuits/neon-models/skybridge.glb",
+      "bytes": 83752,
+      "sha256": "3d38fb9cebe7e33b132d3777781687b5a1c8eb0cbd8e29ebd736c8f31944a6a5",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/circuits/neon-models/split-spire.glb",
+      "bytes": 2084096,
+      "sha256": "c1614e18fb986de4972934733bc68a0c7207102ae43e824d1ad7e2c1fa6af4c7",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/circuits/neon-models/terraces.glb",
+      "bytes": 1686412,
+      "sha256": "36535ee2709022b74fe367b74ff1a98a9e2d4b27f4b9e6db437df578bab1589d",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/circuits/neon-models/tunnel-portal.glb",
+      "bytes": 884448,
+      "sha256": "668392b82499984268ec147ebd5db38a4b2abcf62f8d41aae8e9cb6dc555cfec",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/circuits/neon-models/tunnel-service-bay.glb",
+      "bytes": 349764,
+      "sha256": "00886aea6111e1ae8447012fcda47e0fe6f0adfaed506a05d39c9c572c87ef55",
+      "source": "Original Gridbound Blender-authored building and bridge models; inspired by owner-supplied concept image"
+    },
+    {
+      "file": "public/cars/neon/k89-r.glb",
+      "bytes": 1400116,
+      "sha256": "ba2d47a19fa7a3bb8b0adbc60167287f5cfdc12019d5771172293c76c52519d8",
+      "source": "Original Gridbound Blender-authored K89-R car"
+    },
+    {
+      "file": "public/cars/shinsei/shinsei-nd01.glb",
+      "bytes": 7594296,
+      "sha256": "cbd4f30954ed3a90769d91d87114a1d9433dcd175dd56cdd632ee586a19f8ab6",
+      "source": "Owner-authored jev3d Blender car and decals; baked and rigged for Gridbound"
+    },
+    {
+      "file": "src/assets/audio/engine-load-loop.mp3",
+      "bytes": 65245,
+      "sha256": "37f57d38add2a2eb6e1c8d43fc0153d6d1138f55919536c7619324219a5cda06",
+      "source": "ElevenLabs Sound Effects; commercial rights confirmed by owner"
+    },
+    {
+      "file": "public/circuits/neon-billboard-atlas-v2.webp",
+      "bytes": 1049992,
+      "sha256": "e7f75b33d0043b364e0ca29eeb05f453aa6b53bfcf2baf233b073543095f759b",
+      "source": "OpenAI image generation; original fictional billboard artwork"
+    },
+    {
+      "file": "public/circuits/neon-billboard-atlas.webp",
+      "bytes": 583484,
+      "sha256": "c68ccfb0bcaa05bf25bab8644f1a50250275cba3d350f29bc42930607753b7ee",
+      "source": "OpenAI image generation; original fictional billboard artwork"
+    },
+    {
+      "file": "public/circuits/neon-geisha-poster.webp",
+      "bytes": 32788,
+      "sha256": "1a8fbe13e9737db5d8c73f4551102e8ccbb24f62ddb909174747fb6d619bbeef",
+      "source": "Owner-provided Grok-generated geisha video; optimized video, extracted original soundtrack and poster frame"
+    },
+    {
+      "file": "public/circuits/neon-geisha-voice.mp3",
+      "bytes": 121044,
+      "sha256": "4997a432697414694f2c18cc69e8c7b7670693affaaffc4d755c6b7a959c27ac",
+      "source": "Owner-provided Grok-generated geisha video; optimized video, extracted original soundtrack and poster frame"
+    },
+    {
+      "file": "public/circuits/neon-geisha.mp4",
+      "bytes": 1248139,
+      "sha256": "e7cf32061a0828222cad6c254c1b1067cbcb302dd69c551b66a24f0cbb334d72",
+      "source": "Owner-provided Grok-generated geisha video; optimized video, extracted original soundtrack and poster frame"
+    },
+    {
+      "file": "public/circuits/neon-koi-music.mp3",
+      "bytes": 721197,
+      "sha256": "1b247ec74deed3dd7e215fcd47dd516a201d918e9ad51b11c59ec015096433df",
+      "source": "Owner-provided Chinese guzheng music; original supplied MP3"
+    },
+    {
+      "file": "public/circuits/neon-koi-poster.webp",
+      "bytes": 13236,
+      "sha256": "70b7803a922adc4e69541ab99294e896c16ecf0fb2d7438165aa5444a13fa3dc",
+      "source": "Owner-provided koi video; optimized silent video and poster frame"
+    },
+    {
+      "file": "public/circuits/neon-koi.mp4",
+      "bytes": 795739,
+      "sha256": "941a2d4e9c7a1a3502dc193b48e5ee038dc2631462db28595ee407b5f206e778",
+      "source": "Owner-provided koi video; optimized silent video and poster frame"
+    },
+    {
+      "file": "public/circuits/neon-rain.mp3",
+      "bytes": 55341,
+      "sha256": "2d969a6f6fb430667b571cd2bf575213347a564c63dd81c7e7cacd1593be467b",
+      "source": "Owner-provided ElevenLabs rain; commercial rights confirmed by owner"
+    },
+    {
+      "file": "public/circuits/neon-thumb.webp",
+      "bytes": 10374,
+      "sha256": "7735627c46657951021411c4fea33eb248ce4f3c08aea83f22c42046506b9cfa",
+      "source": "Gridbound in-game capture"
+    },
+    {
+      "file": "public/circuits/neon.webp",
+      "bytes": 83472,
+      "sha256": "a6796f5836031375fe3854e7d3e497b9c6e1fe5f1f544e834078f3e5795dc17e",
+      "source": "Gridbound in-game capture"
+    }
+  ]
+}

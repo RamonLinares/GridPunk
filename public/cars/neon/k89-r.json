@@ -1,0 +1,7 @@
+{
+  "triangles": 41442,
+  "meshes": 12,
+  "bytes": 1400116,
+  "source": "scripts/blender/build_neon_car.py",
+  "axis": "glTF Y-up, +Z forward"
+}

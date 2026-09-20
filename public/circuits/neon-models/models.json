@@ -1,0 +1,26 @@
+[
+  {
+    "name": "exchange",
+    "triangles": 34414,
+    "materials": 11,
+    "bytes": 2398788
+  },
+  {
+    "name": "terraces",
+    "triangles": 24086,
+    "materials": 11,
+    "bytes": 1686412
+  },
+  {
+    "name": "split-spire",
+    "triangles": 29906,
+    "materials": 11,
+    "bytes": 2084096
+  },
+  {
+    "name": "skybridge",
+    "triangles": 1102,
+    "materials": 6,
+    "bytes": 83752
+  }
+]
