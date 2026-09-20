@@ -35,7 +35,7 @@ interface ThreeGameDiagnostics {
   assistLevel: 'easy' | 'normal' | 'hard';
   opponentDifficulty: 'easy' | 'normal' | 'hard';
   quality: {
-    preset: 'auto' | 'performance' | 'quality' | 'extreme';
+    preset: 'auto' | 'performance' | 'quality' | 'extreme' | 'cinematic';
     level: number;
     lastSampleFps: number;
     dprCap: number;

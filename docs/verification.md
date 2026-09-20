@@ -19,7 +19,7 @@ All browser preference and personal-best keys use a separate `gridpunk:` namespa
 - Actual keyboard/touch acceleration, braking, camera change, recovery, mute, pause/resume and restart passed.
 - Audio context unlocked and ran after input. Both viewports reported no JavaScript errors, console errors or HTTP error responses.
 - Production exposed diagnostics but not the development `__game` handle.
-- Extreme graphics selection rendered without errors on both viewports.
+- Extreme and cinematic graphics selections rendered without errors on both viewports.
 - Nonblank active canvas: 157 sampled quantized colors on desktop, 98 on mobile.
 - No horizontal viewport overflow; desktop/mobile garage and active-race screenshots visually inspected. The mobile garage scrolls to additional options while the race button stays accessible.
 - Full-field simulation: all six cars completed two laps after 184 simulated seconds, with no barrier collisions or stopped time. One rival briefly crossed the track limits on its first lap (0.883 seconds offroad); that lap was correctly marked invalid. Every car completed a valid second lap.
@@ -33,8 +33,8 @@ Run `npm test` for the production checks. With `npm run dev` running, run `npm r
 
 Generated local evidence is ignored by Git:
 
-- `artifacts/qa/desktop/garage.png`, `driving.png`, `extreme.png`, `results.json`
-- `artifacts/qa/mobile/garage.png`, `driving.png`, `extreme.png`, `results.json`
+- `artifacts/qa/desktop/garage.png`, `driving.png`, `extreme.png`, `cinematic.png`, `results.json`
+- `artifacts/qa/mobile/garage.png`, `driving.png`, `extreme.png`, `cinematic.png`, `results.json`
 - `artifacts/neon/browser-races.json` and race screenshots
 
 ## Scope and limitations

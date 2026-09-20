@@ -228,11 +228,12 @@ const qualityDescriptions: Record<QualityPreset, string> = {
     auto: 'Balances detail and frame rate, then recovers detail after sustained headroom.',
     performance: '0.8 DPR cap · shadows and post processing off.',
     quality: 'Full shadows, bloom and smooth edges.',
-    extreme: 'Cinematic fog, reflections, motion blur and VHS colour. Highest GPU demand.',
+    extreme: 'Volumetric fog, reflections, motion blur and VHS colour. Highest GPU demand.',
+    cinematic: 'Extreme plus the Neon Signal look: black-sky mist, AgX grade, tape bleed, anamorphic streaks and replay bokeh.',
 };
 const qualitySetting = document.createElement('div');
 qualitySetting.className = 'quality-setting assist-setting';
-qualitySetting.innerHTML = '<span class="hud-label">GRAPHICS</span><div class="assist-row quality-row"><button type="button" data-quality="auto">AUTO</button><button type="button" data-quality="performance">PERFORMANCE</button><button type="button" data-quality="quality">QUALITY</button>' + ('<button type="button" data-quality="extreme">EXTREME</button>') + '</div><p id="quality-description"></p>';
+qualitySetting.innerHTML = '<span class="hud-label">GRAPHICS</span><div class="assist-row quality-row"><button type="button" data-quality="auto">AUTO</button><button type="button" data-quality="performance">PERFORMANCE</button><button type="button" data-quality="quality">QUALITY</button>' + ('<button type="button" data-quality="extreme">EXTREME</button><button type="button" data-quality="cinematic">CINEMATIC</button>') + '</div><p id="quality-description"></p>';
 rivalSetting.insertAdjacentElement('afterend', qualitySetting);
 const updateQualityUi = (preset: QualityPreset, effectiveLevel?: number) => {
     document.querySelectorAll<HTMLButtonElement>('[data-quality]').forEach(button => {

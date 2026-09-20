@@ -80,6 +80,10 @@ test('standalone Neon loads, drives, pauses, restarts and changes cars', async (
   await expect.poll(() => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.quality.preset)).toBe('extreme');
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${out}/extreme.png` });
+  await activate('[data-quality="cinematic"]');
+  await expect.poll(() => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.quality.preset)).toBe('cinematic');
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${out}/cinematic.png` });
   await writeFile(`${out}/results.json`, JSON.stringify({ moving, canvasColors: colors.size, errors, missing }, null, 2));
   expect(errors).toEqual([]);
   expect(missing).toEqual([]);

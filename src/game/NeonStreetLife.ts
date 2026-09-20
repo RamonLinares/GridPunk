@@ -10,7 +10,7 @@ export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THR
  const glow=new THREE.MeshStandardMaterial({color:0xff7446,emissive:0xff5427,emissiveIntensity:1.8});
  const batches=new Map<string,{geometry:THREE.BufferGeometry;material:THREE.Material;transforms:THREE.Matrix4[]}>(),o=new THREE.Object3D();
  const part=(g:THREE.BufferGeometry,m:THREE.Material,p:THREE.Vector3,sx:number,sy:number,sz:number,rx=0,ry=0,rz=0)=>{o.position.copy(p);o.rotation.set(rx,ry,rz);o.scale.set(sx,sy,sz);o.updateMatrix();const key=g.uuid+m.uuid,b=batches.get(key)??{geometry:g,material:m,transforms:[]};b.transforms.push(o.matrix.clone());batches.set(key,b);};
- const lampMaterial=new THREE.MeshStandardMaterial({color:0xffe3b3,emissive:0xffce8b,emissiveIntensity:5.5,roughness:.35});
+ const lampMaterial=new THREE.MeshStandardMaterial({color:0xffe3b3,emissive:0xffce8b,emissiveIntensity:3.4,roughness:.35});
  const lampPositions:THREE.Vector3[]=[];
  for(let i=3;i<builder.spline.count;i+=11){
   if(neonTunnelAt(i/builder.spline.count))continue;
@@ -21,8 +21,10 @@ export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THR
   part(box,materials[0],at(0,4.1),.19,8.2,.22,0,angle);
   part(box,materials[2],at(-side*.65,8.15),1.6,.15,.3,0,angle,side*.13);
   part(box,materials[0],at(-side*1.15,8.02),1.65,.22,.6,0,angle);
-  const light=at(-side*1.15,7.88);
-  part(box,lampMaterial,light,1.5,.045,.48,0,angle);lampPositions.push(light);
+  // A lantern deep enough to survive the sub-HD wet-road reflection at range;
+  // a 4.5 cm strip vanished until the car was almost underneath it.
+  const light=at(-side*1.15,7.83);
+  part(box,lampMaterial,light,1.5,.16,.48,0,angle);lampPositions.push(light);
   part(box,glow,at(-side*.13,.75),.07,.12,.38,0,angle);
  }
  group.userData.lampPositions=lampPositions;

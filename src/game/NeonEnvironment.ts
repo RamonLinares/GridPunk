@@ -1,7 +1,7 @@
 import { neonBankAt, neonTunnelAt, NEON_TUNNEL } from './track/NeonProfile';
 import { createNeonTunnel } from './NeonTunnel';
 import { createNeonAirTraffic } from './NeonAirTraffic';
-import {createNeonLedMaterial,updateNeonLedSigns} from './NeonLedSigns';
+import {createNeonLedMaterial,updateNeonLedSigns,setNeonLedCinematic} from './NeonLedSigns';
 import * as THREE from 'three';
 import type { EnvironmentHandles } from './Environment';
 import type { TrackBuilder } from './track/TrackBuilder';
@@ -229,6 +229,26 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
       const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0x142833}));cableGroup.add(line);
     }group.add(cableGroup);
   }
+  // Cinematic tier only: the reference threads sagging utility looms across
+  // every street at roof height. One merged line draw, hidden on other tiers.
+  const loomPositions:number[]=[];
+  for(let i=3;i<builder.spline.count;i+=9){
+    const f=i/builder.spline.count;if(neonBankAt(f)>.005||neonTunnelAt(f))continue;
+    const s=builder.spline.sampleAt(i),spans=1+Math.floor(rand()*3);
+    for(let wire=0;wire<spans;wire++){
+      const h=13+rand()*12,sag=2+rand()*3.5,half=17+rand()*6,skew=(rand()-.5)*14,along=(rand()-.5)*6+wire*.5;
+      let previous:THREE.Vector3|undefined;
+      for(let k=0;k<=16;k++){
+        const t=k/16,p=s.position.clone().addScaledVector(s.right,(t-.5)*2*half).addScaledVector(s.tangent,along+(t-.5)*skew);
+        p.y=s.position.y+h-Math.sin(t*Math.PI)*sag+wire*.4;
+        if(previous)loomPositions.push(previous.x,previous.y,previous.z,p.x,p.y,p.z);
+        previous=p;
+      }
+    }
+  }
+  const loomGeometry=new THREE.BufferGeometry();loomGeometry.setAttribute('position',new THREE.Float32BufferAttribute(loomPositions,3));
+  const looms=new THREE.LineSegments(loomGeometry,new THREE.LineBasicMaterial({color:0x0b151b}));
+  looms.name='neon-cinematic-looms';looms.userData.intentionalOverpass=true;looms.visible=false;looms.frustumCulled=false;group.add(looms);
   // Raised, continuous pavement ties shop fronts and street furniture to the
   // road instead of leaving a featureless lot between city and race wall.
   for(const side of[-1,1]){
@@ -295,11 +315,20 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
     vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`varying vec3 vDir; void main(){vec3 d=normalize(vDir);float h=max(d.y,0.);vec3 c=mix(vec3(.04,.115,.15),vec3(.008,.025,.038),pow(h,.45));float cloud=sin(d.x*16.+sin(d.z*21.))*sin(d.z*15.+d.y*13.);c+=vec3(.009,.015,.025)*smoothstep(.0,1.,cloud)*(1.-h);gl_FragColor=vec4(c,1.); #include <tonemapping_fragment>\n #include <colorspace_fragment>}`.replace(' #include','\n #include')});
   const sky=new THREE.Mesh(new THREE.SphereGeometry(2300,32,20),skyMat);sky.name='neon-sky';sky.frustumCulled=false;group.add(sky);
-  group.add(new THREE.HemisphereLight(0x93bbc7,0x283b43,.46));
+  const hemisphere=new THREE.HemisphereLight(0x93bbc7,0x283b43,.46);group.add(hemisphere);
   // One near moon-shadow cascade is enough in the emissive night city.
   // Contact shadows already ground every car; distant architecture is unlit.
   const sunLighting=new SunLighting({camera,parent:group,color:0x93bcc9,intensity:.6,sunDirection:new THREE.Vector3(-.3,.8,.4).normalize(),range:150,splits:[],shadowMapSize:1024});
-  const cyan=new THREE.PointLight(0x97dce8,55,38,1.5),pink=new THREE.PointLight(0xf5a078,32,32,1.5);group.add(cyan,pink);
+  // Six roaming lights service the nearest street lamps, and each one fades
+  // in over the last 45 m of its approach. Two lights that snapped to the two
+  // nearest fixtures made every lamp appear to switch on as the car arrived.
+  const lampLights=Array.from({length:6},()=>new THREE.PointLight(0xffd2a1,0,38,1.5));group.add(...lampLights);
+  const [cyan,pink]=lampLights;
+  // Cinematic tier: the flat blue fill leaves the car and its patch of road too
+  // dark to read, so a soft cool fill rides above the player like a practical
+  // camera light. Off on every other tier.
+  const carFill=new THREE.PointLight(0x9fc3e6,0,40,1.6);carFill.name='neon-cinematic-car-fill';carFill.visible=false;group.add(carFill);
+  let cinematic=false;
   const airTraffic=createNeonAirTraffic(group,builder);
   const hologram=createNeonHologram(group,atmosphereLights,builder);
   return {group,ready:Promise.all([landmarks.ready,tunnel.ready]).then(()=>{}),holograms:hologram.audioScene,koiHolograms:hologram.koiAudioScene,disposeExtraResources:()=>{wetRoad.getRenderTarget().dispose();hologram.dispose();landmarks.dispose();tunnel.dispose();billboards.dispose();},sun:sunLighting.sun,sunLighting,sky,
@@ -317,9 +346,12 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
       steam.forEach((sprite,i)=>{sprite.position.y=2.7+Math.sin(seconds*.4+i)*.6;sprite.scale.y=8+Math.sin(seconds*.5+i)*1.5;});
       if(focus){
         sky.position.copy(focus);
-        // Two recycled light sources follow the nearest actual street fixtures.
         const nearest=streetLamps.map(p=>({p,d:p.distanceToSquared(focus)})).sort((a,b)=>a.d-b.d);
-        cyan.position.copy(nearest[0]?.p??focus);pink.position.copy(nearest[1]?.p??focus);
+        lampLights.forEach((light,i)=>{
+          const lamp=nearest[i];light.position.copy(lamp?.p??focus);
+          const reach=lamp?THREE.MathUtils.smoothstep(Math.sqrt(lamp.d),95,140):1;
+          light.intensity=inTunnel?0:75*(1-reach)*(cinematic?1.35:1);light.color.setHex(0xffd2a1);
+        });
       }
       if(focus && inTunnel){
         const station=Math.round(progress*builder.spline.count/3)*3;
@@ -327,13 +359,27 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
           const s=builder.spline.sampleAt(index);lamp.position.copy(s.position).addScaledVector(s.normal,NEON_TUNNEL.clearance-.5);
         }
       }
-      cyan.color.setHex(inTunnel?0xbbe4ec:0xffd2a1);pink.color.setHex(inTunnel?0xffd6a2:0xffd2a1);
-      cyan.intensity=inTunnel?24:75;pink.intensity=inTunnel?18:75;
+      if(inTunnel){
+        cyan.color.setHex(0xbbe4ec);pink.color.setHex(0xffd6a2);
+        cyan.intensity=24*(cinematic?1.35:1);pink.intensity=18*(cinematic?1.35:1);
+      }
+      if(focus&&cinematic){carFill.position.set(focus.x,focus.y+7,focus.z);carFill.intensity=inTunnel?40:70;}
       for(const t of trains){const travel=((seconds*12+t.phase*240)%240)-120;t.mesh.position.copy(t.center).addScaledVector(t.right,travel);}
       airTraffic.update(seconds);
     },
     createSkyProbeScene(){const probe=new THREE.Scene();probe.add(new THREE.Mesh(new THREE.SphereGeometry(40,32,16),skyMat));return probe;},
     updateShadows:()=>sunLighting.update(),prepareShadowMaterials:root=>sunLighting.prepareMaterials(root),
-    setShadows:enabled=>{sunLighting.setShadows(enabled);wetRoad.visible=enabled;if(scene.fog instanceof THREE.FogExp2)scene.fog.density=enabled?.0022:.0058;},setShadowMapSize:size=>sunLighting.setShadowMapSize(size),updateStandings:()=>{},
+    setShadows:enabled=>{sunLighting.setShadows(enabled);wetRoad.visible=enabled;if(scene.fog instanceof THREE.FogExp2&&!scene.userData.neonCinematic)scene.fog.density=enabled?.0022:.0058;},setShadowMapSize:size=>sunLighting.setShadowMapSize(size),updateStandings:()=>{},
+    // Neon Signal lighting is nearly flat: ambient #5a95d9 at .22 and one blue
+    // architectural fill #689ccf, no key light to speak of. Signs and windows
+    // carry the image, with denser street steam and utility looms overhead.
+    setCinematic(enabled){
+      hemisphere.color.setHex(enabled?0x5a95d9:0x93bbc7);hemisphere.groundColor.setHex(enabled?0x0b1520:0x283b43);hemisphere.intensity=enabled?.36:.46;
+      sunLighting.setColor(enabled?0x689ccf:0x93bcc9);sunLighting.setIntensity(enabled?.55:.6);
+      steamMaterial.opacity=enabled?.42:.24;
+      cinematic=enabled;carFill.visible=enabled;if(!enabled)carFill.intensity=0;
+      looms.visible=enabled;
+      setNeonLedCinematic(enabled);billboards.setCinematic(enabled);
+    },
   };
 }

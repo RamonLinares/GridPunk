@@ -15,7 +15,7 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, 3.744 km
 - Shinsei ND-01 and Kurogane K89-R, with a mixed grid of five AI rivals.
 - Neon city, skyways, elevated/banked road sections, tunnel, wet surfaces, animated signs, flying traffic and video holograms.
 - Rain, engine and spatial hologram audio.
-- Driver assists, rival difficulty, automatic/performance/quality/extreme graphics.
+- Driver assists, rival difficulty, automatic/performance/quality/extreme/cinematic graphics.
 - Keyboard, gamepad and touch controls, multiple cameras, recovery, pause and restart.
 - Lap/sector timing, personal bests and lap replay/export.
 - Original Blender models, car source and asset build scripts.

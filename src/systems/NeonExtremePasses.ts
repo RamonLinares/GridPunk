@@ -126,9 +126,12 @@ export class NeonRoadReflectionPass extends Pass {
  override dispose(){this.mask.dispose();this.reflection.dispose();this.maskMaterial.dispose();this.trace.dispose();this.composite.dispose();this.quad.dispose();this.maskScene.clear();}
 }
 
-/** Analogue tape treatment in display space, after AgX/output conversion. */
-export function createNeonTapePass(){return new ShaderPass({uniforms:{tDiffuse:{value:null},time:{value:0},resolution:{value:new THREE.Vector2(1,1)}},vertexShader:vertex,
- fragmentShader:`uniform sampler2D tDiffuse;uniform float time;uniform vec2 resolution;varying vec2 vUv;
+/** Analogue tape treatment in display space, after AgX/output conversion.
+ * `uCinematic` switches to the Neon Signal composite model: a 480-line raster
+ * whose luma stays sharp while chroma is bled sideways with a binomial kernel
+ * (bleed 0.7), 0.57 scanlines, 0.14 signal noise and 0.016 film grain. */
+export function createNeonTapePass(){return new ShaderPass({uniforms:{tDiffuse:{value:null},time:{value:0},resolution:{value:new THREE.Vector2(1,1)},uCinematic:{value:0}},vertexShader:vertex,
+ fragmentShader:`uniform sampler2D tDiffuse;uniform float time,uCinematic;uniform vec2 resolution;varying vec2 vUv;
  float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
  vec3 yiq(vec3 c){return vec3(dot(c,vec3(.299,.587,.114)),dot(c,vec3(.596,-.274,-.322)),dot(c,vec3(.211,-.523,.312)));}
  vec3 rgb(vec3 c){return vec3(c.x+.956*c.y+.621*c.z,c.x-.272*c.y-.647*c.z,c.x-1.106*c.y+1.703*c.z);}
@@ -136,6 +139,19 @@ export function createNeonTapePass(){return new ShaderPass({uniforms:{tDiffuse:{
  // Stable optics: no animated UV displacement or travelling tracking band.
  uv=clamp(uv,vec2(.003),vec2(.997));
  vec2 ab=c*dot(c,c)*.012;vec3 signal=texture2D(tDiffuse,uv).rgb;signal.r=texture2D(tDiffuse,clamp(uv-ab,vec2(.001),vec2(.999))).r;signal.b=texture2D(tDiffuse,clamp(uv+ab,vec2(.001),vec2(.999))).b;
+ if(uCinematic>.5){
+  float aspect=resolution.x/resolution.y;float texel=1./(480.*aspect);float w=.7*6.*texel;float shift=w*.65;
+  vec3 chroma=vec3(0.);float k[5];k[0]=1./16.;k[1]=4./16.;k[2]=6./16.;k[3]=4./16.;k[4]=1./16.;
+  for(int i=0;i<5;i++)chroma+=yiq(texture2D(tDiffuse,clamp(uv+vec2(w*float(i-2)-shift,0.),vec2(.001),vec2(.999))).rgb)*k[i];
+  vec3 y=yiq(signal);y.yz=chroma.yz;signal=rgb(y);
+  float line=.5+.5*sin(vUv.y*480.*6.2831853);signal*=1.-line*.57*.16;
+  float row=floor(vUv.y*480.),col=floor(vUv.x*480.*aspect);
+  signal+=(hash(vec2(col+frame*37.,row+frame*13.))-.5)*.14*.06;
+  float luma=clamp(dot(signal,vec3(.299,.587,.114)),0.,1.);
+  float grain=hash(floor(vUv*resolution/1.75)+vec2(frame*.71,frame))-.5;
+  signal+=grain*.016*(.25+.75*(1.-luma));
+  gl_FragColor=vec4(clamp(signal,0.,1.),1.);return;
+ }
  vec3 chroma=vec3(0.);for(int i=-2;i<=2;i++)chroma+=yiq(texture2D(tDiffuse,clamp(uv+vec2((float(i)*2.5+2.)/resolution.x,0.),vec2(.001),vec2(.999))).rgb)/5.;
  // Slight loss of peripheral resolving power, using the existing tape taps.
  signal=mix(signal,rgb(chroma),smoothstep(.04,.4,dot(c,c))*.16);
@@ -147,3 +163,20 @@ export function createNeonTapePass(){return new ShaderPass({uniforms:{tDiffuse:{
  signal+=(grain*.023+coarse*.009)*(.45+sqrt(luminance)*(1.-luminance));
  signal*=1.-smoothstep(.12,.48,dot(c,c))*.075;
  signal=(signal-.5)*1.025+.5;signal=mix(vec3(dot(signal,vec3(.299,.587,.114))),signal,1.1);signal=pow(max(signal*.95,0.),vec3(.93));gl_FragColor=vec4(clamp(signal,0.,1.),1.);}`});}
+
+/** Neon Signal anamorphic streak: HDR light above `threshold` smeared along a
+ * squeezed horizontal line plus a soft oval, added on top of the frame. Runs
+ * before bloom, as in the reference chain. The reference samples 65 taps
+ * across ±3.5% of the width with exp(-3|x|) weights; 33 taps keep the same
+ * kernel shape at half the cost. Its threshold (1.2) assumes signs several
+ * times brighter than this city's, so the default here sits lower. */
+export function createNeonAnamorphicPass(){return new ShaderPass({uniforms:{tDiffuse:{value:null},resolution:{value:new THREE.Vector2(1,1)},squeeze:{value:2.05},flare:{value:.17},oval:{value:.43},threshold:{value:.55}},vertexShader:vertex,
+ fragmentShader:`uniform sampler2D tDiffuse;uniform vec2 resolution;uniform float squeeze,flare,oval,threshold;varying vec2 vUv;
+ vec3 bright(vec2 uv){return max(texture2D(tDiffuse,clamp(uv,vec2(0.),vec2(1.))).rgb-threshold,vec3(0.));}
+ void main(){vec4 base=texture2D(tDiffuse,vUv);float aspect=resolution.x/resolution.y;vec3 center=bright(vUv);
+  vec3 streak=vec3(0.);float total=0.;
+  for(int i=-16;i<=16;i++){float x=float(i)/16.;float w=exp(-abs(x)*3.);streak+=bright(vUv+vec2(squeeze*.035*x/aspect,0.))*w;total+=w;}
+  streak/=total;
+  vec3 ring=vec3(0.);
+  for(int i=0;i<8;i++){float a=float(i)*.7853982;ring+=bright(vUv+vec2(cos(a)*6./squeeze/resolution.x,squeeze*sin(a)*6./resolution.y))/8.;}
+  gl_FragColor=vec4(max(base.rgb+(streak-center)*flare+(ring-center)*oval,vec3(0.)),base.a);}`});}

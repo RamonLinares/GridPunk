@@ -2042,7 +2042,8 @@ body[data-session="pause"] .session-kicker {
    scrollable session panel on short landscape screens. */
 .quality-setting { margin-top:-8px; }
 .quality-setting p { margin-bottom:14px; }
-.quality-row button { padding-inline:6px; letter-spacing:.06em; }
+.quality-row { flex-wrap:wrap; }
+.quality-row button { flex:1 1 30%; padding-inline:6px; letter-spacing:.06em; }
 
 /* Reserve the centre lane for telemetry. Reverse sits immediately beside the
    pedals at full touch size, so no landscape viewport has to stack it over the

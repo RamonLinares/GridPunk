@@ -22,6 +22,8 @@ export interface EnvironmentHandles {
   prepareShadowMaterials(root: THREE.Object3D): void;
   setShadows(enabled: boolean): void;
   setShadowMapSize(size: number): void;
+  /** Cinematic tier: flat blue fill lighting, self-lit signage glitches and extra street clutter. */
+  setCinematic?(enabled: boolean): void;
   updateStandings(lap: number, seconds: number, entries: PylonEntry[]): void;
 }
 

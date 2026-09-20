@@ -8,7 +8,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { NeonFrameDepthPass } from './NeonFrameDepthPass';
 import { NeonAtmospherePass } from './NeonAtmospherePass';
-import {NeonVelocityPass,NeonTemporalPass,NeonRoadReflectionPass,createNeonTapePass} from './NeonExtremePasses';
+import {NeonVelocityPass,NeonTemporalPass,NeonRoadReflectionPass,createNeonTapePass,createNeonAnamorphicPass} from './NeonExtremePasses';
 import type { Telemetry } from './VehiclePhysics';
 
 /** Fraction of the composer resolution the ambient-occlusion buffers use. */
@@ -55,6 +55,7 @@ const gradeShader = {
     uEye: {value: new THREE.Vector3()},
     uMotion: {value: 0},
     uExtreme: {value: 0}, tVelocity: {value: null}, uJitterDelta: {value: new THREE.Vector2()},
+    uLook: {value: 0}, uDof: {value: 0}, uFocus: {value: 30}, uBokeh: {value: 12},
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -76,6 +77,7 @@ const gradeShader = {
     uniform mat4 uInverseViewProjection,uPreviousViewProjection;
     uniform vec3 uEye;
     uniform float uMotion,uExtreme;uniform sampler2D tVelocity;uniform vec2 uJitterDelta;
+    uniform float uLook,uDof,uFocus,uBokeh;
     #include <packing>
     varying vec2 vUv;
 
@@ -96,10 +98,12 @@ const gradeShader = {
       float total = 0.0;
       int samples = 6;
       float strength = uSpeed * (0.0008 + r2 * 0.004);
+      float metres = 0.0;
       if(uNeon>.5){
         float depth=unpackRGBAToDepth(texture2D(tFrameDepth,uv));
         vec4 world=uInverseViewProjection*vec4(uv*2.-1.,depth*2.-1.,1.);
         world/=world.w;
+        metres=length(world.xyz-uEye);
         vec4 previous=uPreviousViewProjection*world;
         vec2 velocity=(uv-(previous.xy/max(previous.w,.001)*.5+.5))*uMotion;
         if(uExtreme>.5) velocity=(texture2D(tVelocity,uv).xy-uJitterDelta)*uMotion;
@@ -113,6 +117,24 @@ const gradeShader = {
           // buildings over the car or smearing a near barrier into the road.
           float w=abs(sampleDepth-depth)<.0007 ? 1. : .04;
           color+=texture2D(tDiffuse,sampleUv).rgb*w;total+=w;
+        }
+        if(uDof>.5){
+          // Replay-only hexagonal bokeh (cinematic tier): focus follows the
+          // player's car; blur ramps over a range equal to the focus distance,
+          // as the reference shots do. Far samples never bleed over nearer pixels.
+          color/=total;total=1.;
+          float coc=clamp(abs(metres-uFocus)/max(uFocus*.9,1.),0.,1.);
+          float radius=coc*coc*uBokeh;
+          vec3 acc=vec3(0.);float aw=0.;
+          for(int k=0;k<12;k++){
+            float a=float(k)*1.0471976+(k>=6?.5235988:0.);
+            float rr=(k>=6?1.:.55)*radius;
+            vec2 su=clamp(uv+vec2(cos(a),sin(a))*rr/uResolution,vec2(.001),vec2(.999));
+            float sd=unpackRGBAToDepth(texture2D(tFrameDepth,su));
+            float w=sd<depth+.0005?1.:.25;
+            acc+=texture2D(tDiffuse,su).rgb*w;aw+=w;
+          }
+          color=mix(color,acc/aw,smoothstep(.02,.2,coc));
         }
       }else{
         for (int i = 0; i < samples; i++) {
@@ -130,13 +152,30 @@ const gradeShader = {
       color.r = mix(color.r, texture2D(tDiffuse, uv - centered * ab).r, 0.7);
       color.b = mix(color.b, texture2D(tDiffuse, uv + centered * ab).b, 0.7);
 
+      float grain = fract(sin(dot(uv * 900.0 + uTime, vec2(12.9898, 78.233))) * 43758.5453);
+      if(uLook>.5){
+        // Neon Signal authored grade in linear HDR: exposure .84, contrast .98
+        // about mid grey, saturation 1.17, gamma .8; then its five-band depth
+        // contrast (pivot .18) so dim distant surfaces crush while signs survive.
+        vec3 g=(color*.84-.5)*.98+.5;
+        float gl=dot(g,vec3(.2126,.7152,.0722));
+        g=max(mix(vec3(gl),g,1.17),vec3(0.));
+        color=pow(g,vec3(1.25));
+        // Bands at half the reference strength: our mist is thinner, so the full
+        // curve crushed distant walls to black instead of blue-grey.
+        float t=clamp((metres-10.)/440.,0.,1.)*4.;
+        float c=1.025+.025*clamp(t,0.,1.)+.01*clamp(t-1.,0.,1.)-.015*clamp(t-2.,0.,1.)-.02*clamp(t-3.,0.,1.);
+        float y=max(dot(color,vec3(.2126,.7152,.0722)),.0001);
+        color*=clamp(pow(y/.18,c-1.),.05,1.35);
+        color+=(grain-.5)*.002;
+      }else{
       // Filmic grade: gentle S-contrast, saturation lift and cool shadows.
       color = saturate(color, 1.02);
       // Grade in linear HDR without the negative highlights of an unclamped S curve.
       color = max(color, vec3(0.0));
       color = mix(color, color * vec3(0.98, 1.0, 1.06), 0.18);
-      float grain = fract(sin(dot(uv * 900.0 + uTime, vec2(12.9898, 78.233))) * 43758.5453);
       color += (grain - 0.5) * mix(.002,.0045,uNeon);
+      }
       if(uNeon>.5&&uExtreme<.5){
         // Analogue colour bandwidth is softer than luminance. Preserve edge
         // detail while allowing a small horizontal bleed around coloured ads.
@@ -152,9 +191,10 @@ const gradeShader = {
         color*=1.-line*.018;
       }
 
-      // Vignette.
+      // Vignette. The cinematic tier uses the reference's radius .47, softness .5, strength .9.
       float vignette = 1.0 - smoothstep(0.25, 0.9, length(centered * vec2(1.05, 1.0)));
       color *= mix(1.0, vignette, uVignette);
+      if(uLook>.5) color *= 1.0 - smoothstep(.47,.97,length(centered))*.9;
 
       // Damage/impact red tint.
       color = mix(color, color * vec3(1.4, 0.5, 0.5), uDamage);
@@ -185,6 +225,8 @@ export class PostProcessing {
   private readonly depthTextures: THREE.DepthTexture[] = [];
   private readonly mainCamera: THREE.PerspectiveCamera;
   private aoWanted = false;
+  private look = false;
+  private anamorphic?: ShaderPass;
   private enabled = true;
   private time = 0;
   private speed = 0;
@@ -295,8 +337,9 @@ export class PostProcessing {
     this.applyAmbientOcclusion();
   }
 
-  setQuality(high: boolean, extreme=false): void {
-    this.setExtreme(extreme && this.neon);
+  setQuality(high: boolean, extreme=false, cinematic=false): void {
+    this.setExtreme((extreme || cinematic) && this.neon);
+    this.setLook(cinematic && this.neon);
     this.bloom.enabled = high || this.neon;
     // `?noao` isolates ambient occlusion for inspection and profiling.
     this.aoWanted = high && !(typeof location !== 'undefined' && location.search.includes('noao'));
@@ -316,6 +359,7 @@ export class PostProcessing {
       this.reflections=new NeonRoadReflectionPass(this.renderPass.scene,this.mainCamera,this.frameDepth.target.texture);
       this.temporal=new NeonTemporalPass(this.frameDepth.target.texture,this.velocity.target.texture);
       this.tape=createNeonTapePass();
+      this.tape.uniforms.uCinematic.value=this.look?1:0;
       this.composer.insertPass(this.velocity,2);
       this.composer.insertPass(this.reflections,this.composer.passes.indexOf(this.gtao)+1);
       this.composer.insertPass(this.temporal,this.composer.passes.indexOf(this.bloom));
@@ -333,9 +377,38 @@ export class PostProcessing {
     this.applyExtremePasses();this.setSize(this.width,this.height,this.dpr);this.resetMotionHistory();
   }
 
+  /**
+   * The Neon Signal look, reverse-engineered from its authored scene defaults:
+   * bloom .51 above .94, an anamorphic streak before bloom, the composite tape
+   * model, the black-sky mist in the atmosphere pass and the grade in the
+   * grade pass. Replay bokeh is armed here and enabled by `setCinematic`.
+   */
+  private setLook(look:boolean):void {
+    if(this.look===look)return;
+    this.look=look;
+    if(look){
+      this.anamorphic=createNeonAnamorphicPass();
+      this.composer.insertPass(this.anamorphic,this.composer.passes.indexOf(this.bloom));
+    }else if(this.anamorphic){
+      this.composer.removePass(this.anamorphic);this.anamorphic.dispose();this.anamorphic=undefined;
+    }
+    // Bloom threshold scaled like the anamorphic one: .94 in the reference's hot HDR range.
+    this.bloom.strength=look?.51:.83;this.bloom.threshold=look?.7:this.neon?.85:1.25;
+    this.grade.uniforms.uLook.value=look?1:0;
+    this.grade.uniforms.uDof.value=look&&this.cinematic?1:0;
+    if(this.tape)this.tape.uniforms.uCinematic.value=look?1:0;
+    this.atmosphere?.setLook(look);
+    this.renderPass.scene.userData.neonCinematic=look;
+    this.applyExtremePasses();this.setSize(this.width,this.height,this.dpr);
+  }
+
+  /** Distance the replay bokeh keeps sharp, in metres from the camera. */
+  setFocusDistance(metres:number):void { this.grade.uniforms.uFocus.value=Math.max(1,metres); }
+
   private applyExtremePasses():void {
     const active=this.extreme&&this.renderPass.camera===this.mainCamera;
     for(const pass of [this.velocity,this.reflections,this.temporal,this.tape])if(pass)pass.enabled=active;
+    if(this.anamorphic)this.anamorphic.enabled=active&&this.look;
     this.grade.uniforms.uExtreme.value=active?1:0;
     this.grade.uniforms.uAberration.value=active?0:this.neon?.0009:.0001;
     this.smaa.enabled=!active;
@@ -353,6 +426,8 @@ export class PostProcessing {
     this.grade.uniforms.uResolution.value.set(width*dpr,height*dpr);
     this.resetMotionHistory();
     this.tape?.uniforms.resolution.value.set(width*dpr,height*dpr);
+    this.anamorphic?.uniforms.resolution.value.set(width*dpr,height*dpr);
+    this.grade.uniforms.uBokeh.value=12*dpr;
     this.gtao.setSize(
       Math.max(1, Math.round(width * dpr * (this.extreme?.75:AO_RESOLUTION_SCALE))),
       Math.max(1, Math.round(height * dpr * (this.extreme?.75:AO_RESOLUTION_SCALE))),
@@ -362,6 +437,7 @@ export class PostProcessing {
   setCinematic(enabled:boolean):void {
     this.cinematic=enabled;
     this.grade.uniforms.uVignette.value=enabled?.28:.15;
+    this.grade.uniforms.uDof.value=enabled&&this.look?1:0;
   }
 
   update(dt: number, telemetry: Telemetry): void {
@@ -374,7 +450,7 @@ export class PostProcessing {
     uniforms.uTime.value = this.time;
     uniforms.uSpeed.value = this.speed;
     uniforms.uDamage.value = this.damage;
-    this.bloom.strength = this.neon ? .83 : 0.04 + this.speed * 0.03;
+    this.bloom.strength = this.look ? .51 : this.neon ? .83 : 0.04 + this.speed * 0.03;
   }
 
   /** Prepare every world material against the target used by the real race. */
@@ -435,7 +511,7 @@ export class PostProcessing {
   }
 
   dispose(): void {
-    for(const pass of [this.velocity,this.temporal,this.reflections,this.tape])pass?.dispose();
+    for(const pass of [this.velocity,this.temporal,this.reflections,this.tape,this.anamorphic])pass?.dispose();
     this.gtao.dispose();
     this.atmosphere?.dispose();
     this.frameDepth?.dispose();

@@ -1,8 +1,9 @@
-export type QualityPreset = 'auto' | 'performance' | 'quality' | 'extreme';
+export type QualityPreset = 'auto' | 'performance' | 'quality' | 'extreme' | 'cinematic';
 
 export interface QualityState {
   preset: QualityPreset;
-  /** 0 = performance, 1 = balanced auto step, 2 = full quality, 3 = opt-in Neon cinematic effects. */
+  /** 0 = performance, 1 = balanced auto step, 2 = full quality, 3 = opt-in Neon extreme effects,
+   *  4 = extreme plus the Neon Signal cinematic look (fog model, grade, tape, anamorphic, replay bokeh). */
   level: number;
   lastSampleFps: number;
 }
@@ -30,7 +31,7 @@ export class QualityController {
   setPreset(preset: QualityPreset): boolean {
     const previous = this.level;
     this.preset = preset;
-    this.level = preset === 'extreme' ? 3 : preset === 'performance' ? 0 : preset === 'quality' ? 2 : 1;
+    this.level = preset === 'cinematic' ? 4 : preset === 'extreme' ? 3 : preset === 'performance' ? 0 : preset === 'quality' ? 2 : 1;
     this.resetEvidence();
     return previous !== this.level;
   }

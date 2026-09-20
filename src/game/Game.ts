@@ -181,7 +181,7 @@ export class Game {
         this.tracksideGroup = trackside.group;
         this.cullTrackObstacles();
         this.snapGroundProps();
-        this.scene.fog = this.overview ? null : new THREE.FogExp2(0x1c3848, .0022);
+        this.scene.fog = this.overview ? null : this.sceneFog();
         await yieldToBrowser();
         const neonVehicle = selectedNeonVehicle();
         {
@@ -361,7 +361,7 @@ export class Game {
             this.hud.showMessage('ZENITH MAP  -  wheel zoom, T surfaces, M exit', 3);
         }
         else {
-            this.scene.fog = this.overview ? null : new THREE.FogExp2(0x1c3848, .0022);
+            this.scene.fog = this.overview ? null : this.sceneFog();
             this.post.setCamera(this.camera);
             this.mapOverlay?.clear();
             this.mapSurface = 0;
@@ -487,11 +487,11 @@ export class Game {
     }
     private applyQuality(): void {
         if (this.quality >= 2) {
-            this.dprCap = this.quality === 3 ? 1.5 : 1.25;
+            this.dprCap = this.quality >= 3 ? 1.5 : 1.25;
             this.environment.setShadowMapSize(2048);
             this.environment.setShadows(true);
             this.post.setEnabled(true);
-            this.post.setQuality(this.quality >= 2, this.quality === 3);
+            this.post.setQuality(this.quality >= 2, this.quality >= 3, this.quality === 4);
         }
         else if (this.quality === 1) {
             this.dprCap = 1.0;
@@ -506,7 +506,18 @@ export class Game {
             this.post.setQuality(false, false);
             this.post.setEnabled(false);
         }
+        this.environment.setCinematic?.(this.quality === 4);
+        if (this.scene.fog instanceof THREE.FogExp2)
+            this.scene.fog = this.sceneFog();
         this.syncSize(true);
+    }
+    /**
+     * Neon Signal fades the world to black with distance and lets its own mist
+     * supply every colour, so the cinematic tier drops the teal material fog for
+     * a thin black one and leaves the rest to the atmosphere pass.
+     */
+    private sceneFog(): THREE.FogExp2 {
+        return this.quality === 4 ? new THREE.FogExp2(0x000000, .0009) : new THREE.FogExp2(0x1c3848, .0022);
     }
     /** Auto mode steps both ways with separate thresholds and sustained windows. */
     private updateAdaptiveQuality(delta: number): void {
@@ -670,6 +681,7 @@ export class Game {
         this.environment.update(this.car.group.position, frame.worldTime);
         this.updateContactShadows(true);
         this.environment.updateShadows();
+        this.post.setFocusDistance(this.camera.position.distanceTo(this.car.group.position));
         this.post.update(dt, frame.telemetry);
         if (this.replay.playing && !this.replay.exporting) {
             const motion = replayMotion(this.replayRecorder.last!, time), progress = this.spline.progressAt(motion.position, { index: 0 });
@@ -1194,8 +1206,8 @@ export class Game {
     private loadQualityPreset(): QualityPreset {
         try {
             const saved = localStorage.getItem('gridpunk:graphics-quality');
-            if (saved === 'extreme')
-                return 'extreme';
+            if (saved === 'extreme' || saved === 'cinematic')
+                return saved;
             if (saved === 'auto' || saved === 'performance' || saved === 'quality')
                 return saved;
         }

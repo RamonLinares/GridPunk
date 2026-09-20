@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 
 // One clock shared by all designs, including the track-builder gantry.
-const ledTime={value:0};
+export const ledTime={value:0};
 export function updateNeonLedSigns(seconds:number){ledTime.value=seconds;}
+/** Cinematic tier: Neon Signal fault model (band slips, brown-outs, stuck cells). */
+export const ledCinematic={value:0};
+export function setNeonLedCinematic(enabled:boolean){ledCinematic.value=enabled?1:0;}
 
 // Original 5×7 dot-matrix alphabet. These are physical LED cells, not a
 // nearest-filtered photograph or a screen-space filter over the whole game.
@@ -58,11 +61,12 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
  const kind=motion==='race-control'?0:motion==='ticker'?1:motion==='vertical'?2:3;
  material.onBeforeCompile=shader=>{
   shader.uniforms.uLedTime=ledTime;
+  shader.uniforms.uLedCinematic=ledCinematic;
   shader.uniforms.uLedGrid={value:new THREE.Vector2(columns,rows)};
   shader.uniforms.uLedPhase={value:phase};
   shader.uniforms.uLedKind={value:kind};
   shader.uniforms.uLedFlip={value:flipY?1:0};
-  shader.fragmentShader='uniform float uLedTime, uLedPhase, uLedKind, uLedFlip;\nuniform vec2 uLedGrid;\n'+shader.fragmentShader;
+  shader.fragmentShader='uniform float uLedTime, uLedPhase, uLedKind, uLedFlip, uLedCinematic;\nuniform vec2 uLedGrid;\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`
    #ifdef USE_EMISSIVEMAP
     vec2 boardUv=vEmissiveMapUv;
@@ -90,6 +94,22 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
      float sweep=fract(tick*0.13);
      gain=0.88+0.12*exp(-pow((boardUv.y-sweep)*12.0,2.0));
     }
+    if(uLedCinematic>0.5){
+     // Neon Signal fault model: on a seeded ten-second cycle a band of rows
+     // slips sideways for three seconds and the board browns out to 6% for
+     // under a second. A few cells are stuck bright.
+     float clock=(uLedTime+uLedPhase*3.7)/10.0;
+     float cycle=floor(clock),within=fract(clock)*10.0;
+     float h1=fract(sin(cycle*127.1+uLedPhase*311.7)*43758.5453);
+     float h2=fract(sin(cycle*269.5+uLedPhase*183.3)*43758.5453);
+     float fault=step(0.55,h1);
+     float band=1.0-step(0.028,abs(boardUv.y-h2));
+     float slip=floor(h1*7.0-3.0)/uLedGrid.x;
+     signalUv.x=fract(signalUv.x+band*fault*slip*step(within,3.0));
+     gain*=1.0-fault*step(within,0.9)*0.94;
+     float cellHash=fract(sin(dot(floor(boardUv*uLedGrid),vec2(12.9898,78.233)))*43758.5453);
+     gain*=cellHash>0.996?2.2:1.0;
+    }
     if(uLedFlip>0.5)signalUv.y=1.0-signalUv.y;
     vec3 ledSignal=texture2D(emissiveMap,signalUv).rgb;
     if(uLedKind<1.5 && row==23.0)ledSignal=vec3(0.0);
@@ -100,6 +120,6 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
    #endif
   `);
  };
- material.customProgramCacheKey=()=>'neon-led-motion-v1';
+ material.customProgramCacheKey=()=>'neon-led-motion-v2';
  material.name=name;material.userData.ledMatrix={columns,rows,static:false,motion,phase};return material;
 }

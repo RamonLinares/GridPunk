@@ -35,6 +35,13 @@ export class NeonAtmospherePass extends Pass {
         tDepth: {value: null}, uPackedDepth:{value:0}, uInverseProjection: {value: new THREE.Matrix4()},
         uCameraWorld: {value: new THREE.Matrix4()}, uEye: {value: new THREE.Vector3()},
         uTime: {value: 0}, uSteps:{value:8},uLightCount:{value:4},uExtreme:{value:0},
+        // Neon Signal mist: density .021 per metre in a 300 m world. Scaled only
+        // about half as far as the circuit's size would suggest, because the
+        // reference's milky look depends on the scatter dominating the black-out;
+        // scatter tint #197ca8 × glow 1.36 in linear light; the world fades to
+        // black with exp(-(d·k)²) before the mist is added on top.
+        uLook:{value:0},uLookDensity:{value:.012},uLookBlack:{value:.0005},uLookGround:{value:2},
+        uLookTint:{value:new THREE.Vector3(.0132,.273,.533)},
         uLights: {value: Array.from({length: 8}, () => new THREE.Vector3())},
         uRadiance: {value: Array.from({length: 8}, () => new THREE.Vector3())},
       },
@@ -45,13 +52,14 @@ export class NeonAtmospherePass extends Pass {
         uniform sampler2D tDepth;uniform float uPackedDepth;
         uniform mat4 uInverseProjection,uCameraWorld;
         uniform vec3 uEye,uLights[8],uRadiance[8];
-        uniform float uTime,uSteps,uLightCount,uExtreme;
+        uniform float uTime,uSteps,uLightCount,uExtreme,uLook,uLookDensity,uLookBlack,uLookGround;
+        uniform vec3 uLookTint;
         void main(){
           vec4 encoded=texture2D(tDepth,vUv);float depth=uPackedDepth>.5?unpackRGBAToDepth(encoded):encoded.r;
           vec4 view=uInverseProjection*vec4(vUv*2.-1.,depth*2.-1.,1.);
           vec3 world=(uCameraWorld*vec4(view.xyz/view.w,1.)).xyz;
           vec3 ray=world-uEye;
-          float distance=length(ray),reach=min(distance,360.);
+          float distance=length(ray),reach=min(distance,mix(360.,720.,uLook));
           vec3 direction=ray/max(distance,.001);
           // Keep the immediate car/road zone clear. Distant mist is genuinely
           // in world space: its depth changes through turns and camera moves.
@@ -67,10 +75,19 @@ export class NeonAtmospherePass extends Pass {
             float upper=exp(-pow((height-180.)/75.,2.));
             float detail=sin(p.x*.14+p.y*.09+uTime*.08)*sin(p.z*.19-p.y*.07);
             float density=(.0012+.0042*low+.0035*cloud+.003*upper)*(.83+.17*drift)*mix(1.,1.1+detail*.17,uExtreme);
+            if(uLook>.5){
+              // Three mist banks (22, 84, 142 m), warped ground fog and slow eddies.
+              float warp=sin(p.x*.025+uTime*.05)*9.+sin(p.z*.019-uTime*.05)*7.;
+              float hy=height+warp;
+              float banks=exp(-pow((hy-22.)/24.,2.))*.42+exp(-pow((hy-84.)/32.,2.))*.62+exp(-pow((hy-142.)/20.,2.))*.3;
+              float ground=exp(-max(height+warp*.35,0.)/9.)*uLookGround*.9;
+              float eddies=sin(p.x*.037+sin(p.z*.023)+uTime*.05)*sin(p.y*.029-uTime*.05)*.16+.84;
+              density=uLookDensity*((banks+.18)*smoothstep(0.,3.,p.y)+ground)*eddies;
+            }
             // Keep nearby architecture contrasty; scattering builds in the distance.
             density*=mix(.22,1.,smoothstep(35.,155.,12.+(float(i)+.5)*stepLength));
             float opacity=1.-exp(-density*stepLength);
-            vec3 incident=vec3(.012,.048,.08)*(1.+cloud*.45);
+            vec3 incident=mix(vec3(.012,.048,.08)*(1.+cloud*.45),uLookTint,uLook);
             for(int j=0;j<8;j++){
               if(float(j)>=uLightCount)break;
               vec3 delta=(p-uLights[j])/vec3(26.,34.,26.);
@@ -80,7 +97,8 @@ export class NeonAtmospherePass extends Pass {
             scatter+=transmission*opacity*incident;
             transmission*=1.-opacity;
           }
-          gl_FragColor=vec4(scatter,transmission);
+          float black=mix(1.,exp(-pow(distance*uLookBlack,2.)),uLook);
+          gl_FragColor=vec4(scatter,transmission*black);
         }`,
     });
     this.composite = new THREE.ShaderMaterial({
@@ -103,6 +121,7 @@ export class NeonAtmospherePass extends Pass {
 
   update(seconds: number): void { this.time = seconds; }
 
+  setLook(look:boolean):void {this.volume.uniforms.uLook.value=look?1:0;}
   setExtreme(extreme:boolean):void {this.extreme=extreme;this.volume.uniforms.uSteps.value=extreme?24:8;this.volume.uniforms.uLightCount.value=extreme?8:4;this.volume.uniforms.uExtreme.value=extreme?1:0;this.setSize(this.width,this.height);}
   override setSize(width: number, height: number): void {
     this.width=width;this.height=height;const scale=this.extreme?.65:.4;
