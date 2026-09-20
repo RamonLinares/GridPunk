@@ -2,6 +2,8 @@
 
 A standalone cyberpunk racing game set entirely in **Neon District**, extracted from the owner's Gridbound / montmelo-circuit game. Three laps, six cars, 3.744 km of rain-soaked streets.
 
+[Play GridPunk](https://gridpunk.smallweblab.com/) · [GitHub repository](https://github.com/RamonLinares/GridPunk)
+
 ![Neon District](public/circuits/neon.webp)
 
 ## Run
@@ -51,7 +53,9 @@ npm run verify:race # With dev server running: six cars complete two simulated l
 
 The browser checks use installed Google Chrome. `BASE_URL` can override the development URL for `verify:race`. Test screenshots and diagnostics go under `artifacts/`; see [verification](docs/verification.md).
 
-Serve `dist/` at the root of a static website. Runtime media uses root-relative URLs, so subdirectory hosting needs URL changes. The original project's hosting identifiers are not included.
+GitHub Actions builds and deploys `dist/` to GitHub Pages after every push to `main`. The custom domain is **gridpunk.smallweblab.com**, configured in GitHub Pages settings. Cloudflare DNS uses a DNS-only CNAME named `gridpunk` pointing to `ramonlinares.github.io`. GitHub Pages serves the site and manages its HTTPS certificate.
+
+The standard GitHub Pages URL redirects to the custom domain. Runtime media uses root-relative URLs, so deploying under a subdirectory instead would require URL changes. To redeploy without a code change, run the **Deploy GridPunk to GitHub Pages** workflow manually from the repository's Actions tab.
 
 ## Source and assets
 
