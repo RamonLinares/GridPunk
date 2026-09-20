@@ -28,9 +28,9 @@
           <div class="session-head">
             <div class="session-top"><div class="session-eyebrow"><span class="circuit-mark">///</span> GRIDPUNK</div><a class="session-home" href="./">NEON DISTRICT</a></div>
             <div class="session-rule"></div>
-            <p id="session-kicker" class="session-kicker">AFTER DARK / AN ORIGINAL CIRCUIT</p>
-            <h1 id="session-title">NEON DISTRICT<span>Race the<br>night.</span></h1>
-            <p id="session-description" class="session-description">Three laps. Six cars. Your midnight run.</p>
+            <p id="session-kicker" class="session-kicker"></p>
+            <h1 id="session-title"><span>Neon District</span></h1>
+            <p id="session-description" class="session-description"></p>
           </div>
           <div class="session-body">
             <div id="session-result" class="session-result" hidden></div>
@@ -39,15 +39,19 @@
             <details class="controls-details"><summary>DRIVING CONTROLS <span>+</span></summary><div class="controls-grid"><span><kbd>W A S D</kbd> or arrow keys</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>C</kbd> Change camera</span><span><kbd>R</kbd> Return to track</span><span><kbd>ESC</kbd> Pause / resume</span><span><kbd>S</kbd> Reverse at rest</span><span class="controller-controls"><kbd>PAD</kbd> Start pause · X camera · Y recover</span><span class="controller-controls"><kbd>A</kbd> Select · <kbd>B</kbd> Back / reverse</span></div><p>Automatic gears · Controller: left stick + triggers; D-pad or stick navigates menus. Browser sound may need one click or key. Touch controls supported.</p></details>
           </div>
           <div class="session-foot">
-            <button id="session-primary" class="primary-button" type="button" disabled>PREPARING CIRCUIT <span>↗</span></button>
+            <button id="session-primary" class="primary-button" type="button" disabled>LOADING <span>↗</span></button>
             <button id="session-restart" class="secondary-button" type="button" hidden>RESTART SPRINT</button>
-            <div class="session-tip"><i></i> Brake before the corner. Accelerate as the steering unwinds.</div>
-            <p class="course-credit">Original fictional circuit and city. <a href="/credits.html">Credits &amp; licences</a></p>
+            <p class="course-credit"><a href="/credits.html">Credits &amp; licences</a></p>
           </div>
         </div>
-        <div class="session-location"><span>ORIGINAL FICTIONAL CIRCUIT</span><b>GRIDPUNK CITY · AFTER DARK</b><span>3.744 KM / NIGHT STREET RACE</span></div>
+        <div class="session-location"><span>3.744 KM · NIGHT STREET RACE</span></div>
       </section>
-      <div id="loading" role="status"><div class="loading-inner"><span class="loading-brand">GRIDPUNK</span><div class="loading-bar"><i></i></div><span class="loading-hint">PREPARING THE GRID</span></div></div>
+      <div id="loading" role="status"><div class="loading-inner">
+        <span class="loading-brand">GRIDPUNK</span>
+        <div class="loading-log" aria-hidden="true"><span>&gt; NEON DISTRICT  3.744 KM</span><span>&gt; LOADING CITY</span><span>&gt; COMPILING SHADERS</span><span>&gt; WARMING THE GRID<i></i></span></div>
+        <div class="loading-bar"><i></i></div>
+        <span class="loading-hint">PREPARING THE GRID</span>
+      </div></div>
     </main>
         <noscript>JavaScript is required to play GridPunk.</noscript>
     <script type="module" src="/src/main.ts"></script>

@@ -8,7 +8,7 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, 3.744 km
 
 ## Play
 
-[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your car and press **Lights out. Let’s race.**
+[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your car and press **Start race**.
 
 ## What's included
 

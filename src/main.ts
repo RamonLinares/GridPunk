@@ -34,14 +34,14 @@ document.title = `GridPunk — ${circuit.shortName}`;
 canvas.setAttribute('aria-label', `${circuit.name} driving game`);
 document.querySelector('.session-eyebrow')!.innerHTML = '<span class="circuit-mark">///</span> GRIDPUNK';
 document.querySelector('#circuit-corners')!.textContent = String(circuit.cornerCount);
-document.querySelector('.session-location')!.innerHTML = `<span>${circuit.coordinates}</span><b>${circuit.location.toUpperCase()}</b><span>${circuit.lengthLabel} KM / NIGHT STREET RACE</span>`;
+document.querySelector('.session-location')!.innerHTML = `<span>${circuit.lengthLabel} KM · NIGHT STREET RACE</span>`;
 {
     document.body.classList.add('neon-race');
     document.querySelector('.session-specs > div:last-child b')!.textContent = 'RAIN';
-    title.innerHTML = 'NEON DISTRICT<span>Race the<br>night.</span>';
-    kicker.textContent = 'AFTER DARK / AN ORIGINAL CIRCUIT';
-    description.textContent = 'Dive beneath the skyways. Chase the light through a city that never sleeps. Three laps. Six cars. Your midnight run.';
-    document.querySelector('.course-credit')!.innerHTML = 'Original fictional circuit and city. <a href="/credits.html">Credits &amp; licences</a>';
+    title.innerHTML = '<span>Neon District</span>';
+    kicker.textContent = '';
+    description.textContent = '';
+    document.querySelector('.course-credit')!.innerHTML = '<a href="/credits.html">Credits &amp; licences</a>';
 }
 const activeSteers = new Map<number, number>();
 {
@@ -110,14 +110,14 @@ function showSession(next: typeof session): void {
     restart.hidden = next !== 'pause';
     result.hidden = next !== 'finish';
     if (next === 'pause') {
-        kicker.textContent = 'TAKE A BREATHER';
-        title.innerHTML = 'SESSION<span>Paused.</span>';
-        description.textContent = 'The grid can wait. Pick up exactly where you left off.';
-        primary.innerHTML = 'BACK TO THE RACE <span>↗</span>';
+        kicker.textContent = '';
+        title.innerHTML = '<span>Paused</span>';
+        description.textContent = '';
+        primary.innerHTML = 'RESUME <span>↗</span>';
     }
     else if (next === 'finish') {
-        kicker.textContent = 'CHEQUERED FLAG';
-        title.innerHTML = 'SPRINT<span>Complete.</span>';
+        kicker.textContent = '';
+        title.innerHTML = '<span>Finished</span>';
         primary.innerHTML = 'RACE AGAIN <span>↗</span>';
     }
     if (ready)
@@ -162,7 +162,7 @@ document.addEventListener('race:finish', (event) => {
         newPersonalBest?: boolean;
     }>).detail;
     showSession('finish');
-    description.textContent = finish.position === 1 ? `First across the line. ${circuit.shortName} is yours.` : 'A sprint in the books. There is always another tenth to find.';
+    description.textContent = '';
     result.innerHTML = `<div><span>FINISH</span><b>P${finish.position}<small> / 6</small></b></div><div><span>BEST LAP</span><b>${formatTime(finish.bestLap)}</b></div>`;
     const laps = document.createElement('div');
     laps.className = 'result-laps';
@@ -260,6 +260,7 @@ document.addEventListener('race:quality', event => {
     }>).detail;
     updateQualityUi(detail.preset, detail.effectiveLevel);
 }, { signal });
+
 const controlsNote = document.querySelector<HTMLElement>('.controls-details > p:not(.course-credit)');
 if (controlsNote)
     controlsNote.append(' Automatic arcade aero adjusts the rear-wing flap on suitable straights; it is not race DRS.');
@@ -365,7 +366,7 @@ game.init().then(() => {
     game.setPaused(true);
     game.start();
     primary.disabled = false;
-    primary.innerHTML = 'LIGHTS OUT. LET’S RACE. <span>↗</span>';
+    primary.innerHTML = 'START RACE <span>↗</span>';
     hideLoading();
     const selected = document.querySelector<HTMLButtonElement>('[data-assist].active')?.dataset.assist as AssistLevel | undefined;
     if (selected)
