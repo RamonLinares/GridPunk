@@ -8,7 +8,7 @@ The owner's `external_assets/video_billboard_mars.mp4` plays on a 56 × 37.77 m 
 
 - All three videos: H.264, 688 × 464, 24 fps, about 10 seconds, CRF 22, fast-start MP4, silent video track. WebP poster frames display until playback starts.
 - Ramen: original supplied audio, extracted as 128 kb/s MP3 and spatialized near the projection.
-- Bonsai: 22-second ElevenLabs Sound Effects solo-shamisen loop, normalized to −17 LUFS and a −2 dBTP target. It repeats independently of the shorter visual loop. Runtime gain is 1.15, with 280 m range, 100 m reference distance and a gentle 110 m departure fade to remain audible during a drive-by.
+- Bonsai: 22-second ElevenLabs Sound Effects solo-shamisen loop, normalized to −17 LUFS and a −2 dBTP target. It repeats independently of the shorter visual loop. Runtime gain is 0.58, with 280 m range, 100 m reference distance and a gentle 110 m departure fade to remain audible during a drive-by.
 - Mars: the supplied voice track, processed through 420–3200 Hz speaker bandwidth, +5 dB presence at 1.6 kHz, drive and tanh saturation, then 135/310/570 ms echoes. Normalized to −18 LUFS with −2 dBTP target; trimmed/padded to the video duration. Runtime spatial filtering, panning, departure fade, reverb and Doppler add the sense of an amplified announcement passing overhead. Gain is 0.85, with a 220 m range and 75 m reference distance.
 
 The browser fetches no provider APIs. Sound sources use the existing audio master, user-gesture unlock, mute/pause behavior and teardown. Nearby video decoders pause outside their radius (550 m for projections, 800 m for the billboard) and when the document is hidden. Each audio scene fades at its own range and stops its source. Neon retains its original 170 m range. All three audio scenes are included in replay/export mixing.
@@ -50,3 +50,7 @@ After the drive-by correction, `npm run build` and all four `tests/neon.spec.ts`
 The current 22-second loop replaces the previous layered ambience with the owner-requested solo shamisen Sound Effects generation. The same spatial mix is retained. Local processing targets −17 LUFS / −2 dBTP and applies 15 ms edge fades to reduce the loop boundary discontinuity. The decoded stereo peak is 0.789 (below clipping); the boundary step is about 0.002.
 
 The production build passed. Targeted desktop and touch-emulated mobile Chrome checks verified decoding, active sound at both bonsai placements during drive-bys, continuous source looping for longer than one complete cycle, pause and out-of-range shutdown, and no browser/HTTP errors. Natural pauses in the plucked phrases create lower instantaneous levels than the previous sustained ambience; complete-cycle RMS is checked separately. The final edge-smoothed file also passed a fresh browser decode check. Evidence and generation settings are under `artifacts/kairo-shamisen/`. Automated measurements do not assess subjective musical quality.
+
+## Bonsai volume adjustment
+
+After the shamisen replacement, the owner requested a lower volume. Kairo's bonsai runtime gain is now 0.58 instead of 1.15 (−5.95 dB). Both projections and replay mixing use this same scene gain. The audio file, 280 m range and departure fade are unchanged. Browser inspection confirmed the new gain on desktop and touch-emulated mobile.

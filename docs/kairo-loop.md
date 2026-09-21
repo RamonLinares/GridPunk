@@ -4,7 +4,7 @@ Choose **Kairo Loop** in the session menu, or open `/?circuit=kairo`. Neon Distr
 
 The centerline and 18 corner markers were adapted from the owner’s `montmelo/montmelo-circuit` reference project. That reference credits OpenStreetMap contributors (ODbL) for the mapped horizontal centerline. The derived coordinates are included in this repository, and runtime attribution is in `public/credits.html`.
 
-This is a city adaptation of the layout. Survey elevations are flattened to the city floor, with a smooth 8 m flyover at the figure-eight’s upper crossing. Horizontal coordinates are uniformly scaled by 1.000437333351 to retain the game’s 5.807 km timing convention. The reference’s sector fractions and corner order are retained. The flyover has approximately 180 m approach ramps, a concrete underside, and piers outside both racing corridors.
+This is a city adaptation of the layout. Survey elevations are flattened to the city floor, with a smooth 8 m flyover at the figure-eight’s upper crossing. Horizontal coordinates are uniformly scaled by 1.000437333351 to retain the game’s 5.807 km timing convention. The reference’s sector fractions and corner order are retained. The flyover has approximately 180 m approach ramps, a detailed steel underside beneath the concrete deck, and piers outside both racing corridors.
 
 Both circuits reuse the existing arcade vehicle physics and fixed-step race loop. Kairo enables route-height selection for tyres, surface effects and shadows, and separate-deck filtering for car contacts and AI traffic. Neon’s authored banks and tunnel remain exclusive to Neon District. City buildings follow the entire new loop, and the skyline bounds expand to encompass it.
 
@@ -33,3 +33,11 @@ Wheel validation passed on 21 September 2026: `npm run build`, both production K
 Kairo has ramen and bonsai floating holograms, a new ElevenLabs bonsai ambience loop, and a Mars travel billboard mounted on an opening-straight building with a processed public-address voice. See [media sources, processing and verification](kairo-media.md).
 
 The wheel’s pink rim is thicker and brighter, with sixteen illuminated radial spokes per face. Its skyline fog density is capped independently of street fog, including Performance mode. The 198 m diameter fits the early approach view; the media building beyond Turn 1 is lower to preserve the wheel’s silhouette.
+
+## Flyover underside
+
+The bridge now has longitudinal steel webs and flanges, crossmembers, recessed panel bays with seams and fasteners, paired copper service pipes with collars, hazard markers, and protected warm maintenance lights. The existing concrete deck now has UVs so its concrete texture is visible. The detailing follows the elevated spline and stops before the low ramp ends.
+
+All new parts are procedural and shared across seven instanced batches: 1,900 parts in 38 bays, adding 28,880 triangles and seven draw calls in the desktop underpass view. No dynamic lights or shadow casters were added. Scene disposal owns the shared geometry and materials. Desktop and touch-emulated mobile driving views were inspected with no browser errors; evidence is in `artifacts/kairo-underpass/`. Production build passed, with the existing large-bundle warning.
+
+Upward raycasts across the lower road center and both driving lanes found 31 overhead hits with a minimum 6.00 m clearance. The bonsai gain was verified at 0.58 with its 280 m range preserved.

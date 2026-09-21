@@ -20,7 +20,7 @@ export function createNeonHologram(parent: THREE.Group, lights: NeonAtmosphereLi
     : {kind:'koi', height:20, elevation:15.5, offset:0, brightness:1.85, radiance:[.117,.39,.715], stations:[.27,.75]});
   return {
     audioScene: {...primary.audioScene, audioUrl:kairo?'/circuits/kairo-ramen-audio.mp3':'/circuits/neon-geisha-voice.mp3'},
-    koiAudioScene: {...secondary.audioScene, audioUrl:kairo?'/circuits/kairo-bonsai-music.mp3':'/circuits/neon-koi-music.mp3',gain:kairo?1.15:.28,syncVideo:false,...(kairo?{range:280,referenceDistance:100,departureDistance:110}:{})},
+    koiAudioScene: {...secondary.audioScene, audioUrl:kairo?'/circuits/kairo-bonsai-music.mp3':'/circuits/neon-koi-music.mp3',gain:kairo?.58:.28,syncVideo:false,...(kairo?{range:280,referenceDistance:100,departureDistance:110}:{})},
     update(focus?: THREE.Vector3) { primary.update(focus); secondary.update(focus); },
     dispose() { primary.dispose(); secondary.dispose(); },
   };
