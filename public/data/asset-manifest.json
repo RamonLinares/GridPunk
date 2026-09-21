@@ -57,9 +57,9 @@
     },
     {
       "file": "public/circuits/kairo-bonsai-music.mp3",
-      "bytes": 384813,
-      "sha256": "9813ea8c27d1a0997d2b923b92025bda66d2b7bb7263155045ed82a19b5a54e8",
-      "source": "ElevenLabs generated instrumental ambience; owner-requested bonsai loop"
+      "bytes": 352941,
+      "sha256": "603f27b5db30f1207d46d23b011205ad51c6aab0c5f67eabfab2f9c76b8bda39",
+      "source": "ElevenLabs Sound Effects; owner-requested relaxing shamisen loop"
     },
     {
       "file": "public/circuits/kairo-bonsai-poster.webp",

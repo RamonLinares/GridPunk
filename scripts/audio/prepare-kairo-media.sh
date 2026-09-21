@@ -13,4 +13,4 @@ for kind in ramen bonsai mars; do
 done
 ffmpeg -hide_banner -loglevel error -i external_assets/ramen.mp4 -map 0:a:0 -vn -c:a libmp3lame -b:a 128k -map_metadata -1 -y public/circuits/kairo-ramen-audio.mp3
 ffmpeg -hide_banner -loglevel error -i external_assets/video_billboard_mars.mp4 -map 0:a:0 -vn -af 'highpass=f=420,lowpass=f=3200,equalizer=f=1600:t=q:w=1.2:g=5,volume=2.2,asoftclip=type=tanh,aecho=0.8:0.7:135|310|570:0.3|0.18|0.1,loudnorm=I=-18:TP=-2:LRA=6,apad,atrim=duration=10.041667' -c:a libmp3lame -b:a 128k -map_metadata -1 -y public/circuits/kairo-mars-megaphone.mp3
-ffmpeg -hide_banner -loglevel error -i artifacts/kairo-videos/bonsai-eleven-loop.mp3 -af 'loudnorm=I=-17:TP=-2:LRA=7' -c:a libmp3lame -b:a 128k -map_metadata -1 -y public/circuits/kairo-bonsai-music.mp3
+ffmpeg -hide_banner -loglevel error -i artifacts/kairo-shamisen/bonsai-eleven-loop.mp3 -af 'loudnorm=I=-17:TP=-2:LRA=7,afade=t=in:d=0.015,afade=t=out:st=21.985:d=0.015' -c:a libmp3lame -b:a 128k -map_metadata -1 -y public/circuits/kairo-bonsai-music.mp3

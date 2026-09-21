@@ -1,10 +1,10 @@
 """Generate the owner-requested bonsai music with ElevenLabs Sound Generation (one paid call)."""
 import json, os, pathlib, urllib.request, urllib.error
-out = pathlib.Path('artifacts/kairo-videos')
+out = pathlib.Path('artifacts/kairo-shamisen')
 out.mkdir(parents=True, exist_ok=True)
 body = {
-    'text': 'Seamless meditative cyberpunk bonsai instrumental loop. Sparse delicate koto plucks in a slow pentatonic melody, breathy bamboo flute answers, warm sustained analog synth drone, tiny shimmering bell harmonics and quiet granular texture. An organic tree made of green light. Gentle, intimate, mysterious and soothing. No vocals, speech, drums or environmental noises. Steady harmony, no sudden transitions, matching start and end.',
-    'duration_seconds': 24, 'loop': True, 'prompt_influence': 0.5,
+    'text': 'Relaxing solo acoustic Japanese shamisen, gently plucking a simple warm pentatonic phrase. Slow, sparse notes, soft attacks, natural wooden resonance and delicate decays. Peaceful bonsai garden mood, comfortable pauses between phrases, consistent gentle volume. Clean intimate recording, subtle room reverb. Only shamisen: no voices, drums, synthesizers, drones, bells, flute or background noise. Seamless loop, calm throughout.',
+    'duration_seconds': 22, 'loop': True, 'prompt_influence': 0.65,
     'model_id': 'eleven_text_to_sound_v2',
 }
 key = os.environ.get('ELEVENLABS_API_KEY')
