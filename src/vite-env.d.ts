@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ThreeGameDiagnostics {
-  circuit: 'neon';
+  circuit: import('./game/track/circuits').CircuitId;
   trackLength: number;
   frame: number;
   elapsed: number;
@@ -32,8 +32,8 @@ interface ThreeGameDiagnostics {
   lap: number;
   started: boolean;
   countdown: number;
-  assistLevel: 'easy' | 'normal' | 'hard';
-  opponentDifficulty: 'easy' | 'normal' | 'hard';
+  assistLevel: 'rookie';
+  opponentDifficulty: import('./systems/AiDriver').OpponentDifficulty;
   quality: {
     preset: 'auto' | 'performance' | 'quality' | 'extreme' | 'cinematic';
     level: number;

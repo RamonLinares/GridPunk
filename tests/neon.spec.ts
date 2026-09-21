@@ -2,21 +2,32 @@ import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-test('standalone Neon loads, drives, pauses, restarts and changes cars', async ({ page, isMobile }, info) => {
+for (const circuit of ['neon', 'kairo'] as const) test(`${circuit} loads, drives, pauses, restarts and changes cars`, async ({ page, isMobile }, info) => {
   const errors: string[] = [], missing: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   page.on('response', response => { if (response.status() >= 400) missing.push(`${response.status()} ${response.url()}`); });
-  const out = `artifacts/qa/${info.project.name}`;
+  const out = `artifacts/qa/${info.project.name}/${circuit}`;
   await mkdir(out, { recursive: true });
-  // Legacy circuit parameters must never expose another circuit.
-  await page.goto(isMobile ? '/?circuit=monaco' : '/');
+  // An old saved assist preference must not revive a removed handling mode.
+  await page.addInitScript(({ circuit, legacy }) => {
+    localStorage.setItem('gridpunk:assist-level', legacy);
+    localStorage.setItem(`gridpunk:${circuit}-sprint-best-v1:easy`, '123.456');
+    localStorage.setItem(`gridpunk:${circuit}-sprint-best-v1:${legacy}`, '90');
+  }, { circuit, legacy: isMobile ? 'normal' : 'hard' });
+  // Unknown legacy links fall back to Neon; Kairo is selected explicitly.
+  await page.goto(circuit === 'kairo' ? '/?circuit=kairo' : isMobile ? '/?circuit=monaco' : '/');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__ && document.querySelector<HTMLElement>('#loading')?.hidden);
-  await expect(page).toHaveTitle('GridPunk — Neon District');
+  await expect(page).toHaveTitle(circuit === 'neon' ? 'GridPunk — Neon District' : 'GridPunk — Kairo Loop');
   await expect(page.locator('#home, [data-pick]')).toHaveCount(0);
   await expect(page.locator('#session-primary')).toBeEnabled();
-  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.circuit)).toBe('neon');
+  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.circuit)).toBe(circuit);
+  await expect(page.locator(`[data-circuit="${circuit}"]`)).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => '__game' in window)).toBe(false);
+  await expect(page.locator('[data-assist]')).toHaveCount(1);
+  await expect(page.locator('[data-assist="rookie"]')).toBeDisabled();
+  await expect(page.locator('#hud-assist-name')).toHaveText('ROOKIE ASSIST');
+  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.assistLevel)).toBe('rookie');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `${out}/garage.png` });
 
@@ -24,9 +35,16 @@ test('standalone Neon loads, drives, pauses, restarts and changes cars', async (
     if (isMobile) await page.locator(selector).tap();
     else await page.locator(selector).click();
   };
+  await activate('[data-difficulty="hard"]');
+  await expect.poll(() => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.opponentDifficulty)).toBe('hard');
+  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.assistLevel)).toBe('rookie');
+  await activate('[data-difficulty="normal"]');
   await activate('[data-quality="performance"]');
   await activate('#session-primary');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__!.started);
+  await expect(page.locator('#hud-best')).toHaveText('2:03.456');
+  for (const key of ['Digit1', 'Digit2', 'Digit3', 'KeyE']) await page.keyboard.press(key);
+  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.assistLevel)).toBe('rookie');
   const touch = isMobile ? await page.context().newCDPSession(page) : null;
   const hold = async (selector: string, key: string, ms: number) => {
     if (touch) {
@@ -74,6 +92,7 @@ test('standalone Neon loads, drives, pauses, restarts and changes cars', async (
   await activate('[data-car="k89"]');
   await page.waitForURL('**car=k89');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__ && document.querySelector<HTMLElement>('#loading')?.hidden);
+  expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.circuit)).toBe(circuit);
   await expect(page.locator('[data-car="k89"]')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => localStorage.getItem('gridpunk:neon-car'))).toBe('k89');
   await activate('[data-quality="extreme"]');

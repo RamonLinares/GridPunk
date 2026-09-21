@@ -10,13 +10,13 @@ export function createWetRoad(builder:TrackBuilder):Reflector & {material:THREE.
  const road=builder.group.getObjectByName('road') as THREE.Mesh;
  const geometry=road.geometry.clone();geometry.translate(0,-.04,0);geometry.rotateX(Math.PI/2);
  const wetness=new Float32Array(geometry.getAttribute('position').count);
- for(let i=0;i<wetness.length;i++)wetness[i]=neonRainExposure((Math.floor(i/2)%builder.spline.count)/builder.spline.count,builder.spline.length);
+ for(let i=0;i<wetness.length;i++)wetness[i]=builder.spline.circuitId === 'neon' ? neonRainExposure((Math.floor(i/2)%builder.spline.count)/builder.spline.count,builder.spline.length) : 1;
  geometry.setAttribute('weatherWetness',new THREE.BufferAttribute(wetness,1));
  const shader={name:'NeonWetRoad',uniforms:{color:{value:new THREE.Color()},tDiffuse:{value:null},textureMatrix:{value:new THREE.Matrix4()},uTime:{value:0},uExtreme:{value:0}},vertexShader:`
  attribute float weatherWetness;uniform mat4 textureMatrix;varying vec4 vUv;varying vec3 vWorld;varying vec3 vView;varying float vPlanar;
  #include <common>
  #include <fog_pars_vertex>
- void main(){vPlanar=weatherWetness*(1.-smoothstep(.02,.12,abs(normal.x)+abs(normal.y)));vUv=textureMatrix*vec4(position,1.);vec4 world=modelMatrix*vec4(position,1.);vWorld=world.xyz;vView=cameraPosition-world.xyz;vec4 mvPosition=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mvPosition;
+ void main(){vPlanar=weatherWetness*(1.-smoothstep(.02,.12,abs(position.z)))*(1.-smoothstep(.02,.12,abs(normal.x)+abs(normal.y)));vUv=textureMatrix*vec4(position,1.);vec4 world=modelMatrix*vec4(position,1.);vWorld=world.xyz;vView=cameraPosition-world.xyz;vec4 mvPosition=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mvPosition;
  #include <fog_vertex>
  }`,fragmentShader:`
  uniform sampler2D tDiffuse;uniform float uTime,uExtreme;varying vec4 vUv;varying vec3 vWorld;varying vec3 vView;varying float vPlanar;

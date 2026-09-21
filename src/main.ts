@@ -1,9 +1,9 @@
 import './styles.css';
 import { installReplayPanel } from './systems/ReplayPanel';
-import { selectedCircuit } from './game/track/circuits';
+import { CIRCUITS, selectedCircuit, type CircuitId } from './game/track/circuits';
 import { GamepadActions } from './core/GamepadActions';
 import { Game } from './game/Game';
-import type { AssistLevel } from './systems/VehiclePhysics';
+import type { OpponentDifficulty } from './systems/AiDriver';
 import type { QualityPreset } from './systems/QualityController';
 import { formatTime } from './systems/Timing';
 import { selectedNeonVehicle, type NeonVehicle } from './entities/NeonVehicleChoice';
@@ -38,17 +38,36 @@ document.querySelector('.session-location')!.innerHTML = `<span>${circuit.length
 {
     document.body.classList.add('neon-race');
     document.querySelector('.session-specs > div:last-child b')!.textContent = 'RAIN';
-    title.innerHTML = '<span>Neon District</span>';
+    title.textContent = circuit.shortName;
+    document.querySelector('.session-home')!.textContent = circuit.shortName.toUpperCase();
+    document.querySelector('.loading-log > span')!.textContent = `> ${circuit.shortName.toUpperCase()}  ${circuit.lengthLabel} KM`;
     kicker.textContent = '';
     description.textContent = '';
     document.querySelector('.course-credit')!.innerHTML = '<a href="/credits.html">Credits &amp; licences</a>';
 }
+// Circuit changes start a fresh sprint while preserving car/debug URL options.
+const circuitPicker = document.createElement('div');
+circuitPicker.className = 'assist-setting circuit-picker';
+circuitPicker.innerHTML = `<span class="hud-label">CIRCUIT</span><div class="assist-row" role="group" aria-label="Circuit">${Object.values(CIRCUITS).map(option => `<button type="button" data-circuit="${option.id}">${option.shortName.toUpperCase()}</button>`).join('')}</div><p>Changing circuit starts a new sprint.</p>`;
+document.querySelector('.session-specs')!.insertAdjacentElement('afterend', circuitPicker);
+circuitPicker.querySelectorAll<HTMLButtonElement>('[data-circuit]').forEach(button => {
+    const selected = button.dataset.circuit === circuit.id;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+    button.addEventListener('click', () => {
+        const id = button.dataset.circuit as CircuitId;
+        if (id === circuit.id) return;
+        const url = new URL(location.href);
+        url.searchParams.set('circuit', id);
+        location.assign(url.href);
+    }, { signal });
+});
 const activeSteers = new Map<number, number>();
 {
     const garage = document.createElement('div');
     garage.className = 'assist-setting neon-garage';
     garage.innerHTML = '<span class="hud-label">YOUR CAR</span><div class="assist-row" role="group" aria-label="Neon car"><button type="button" data-car="shinsei">SHINSEI ND-01</button><button type="button" data-car="k89">KUROGANE K89-R</button></div><p>Shinsei: armoured prototype. K89-R: open cockpit. Changing car starts a new sprint.</p>';
-    document.querySelector('.session-specs')!.insertAdjacentElement('afterend', garage);
+    circuitPicker.insertAdjacentElement('afterend', garage);
     garage.querySelectorAll<HTMLButtonElement>('[data-car]').forEach(button => {
         const selected = button.dataset.car === selectedNeonVehicle();
         button.classList.toggle('active', selected);
@@ -190,23 +209,8 @@ document.addEventListener('race:finish', (event) => {
     result.setAttribute('aria-label', `Finished in position ${finish.position}. Best lap ${formatTime(finish.bestLap)}.`);
     game.setPaused(true);
 }, { signal });
-const assistDescriptions: Record<AssistLevel, string> = {
-    easy: 'Forgiving, speed-weighted steering and traction control. Learn the circuit and fight for places.',
-    normal: 'Balanced assists for a responsive, stable car that stays calm on the straights.',
-    hard: 'Reduced assists and maximum control authority. Precision earns every position.',
-};
-const driverSetting = document.querySelector('[data-assist]')!.closest('.assist-setting')!;
-driverSetting.querySelector<HTMLElement>('.hud-label')!.textContent = 'DRIVER ASSISTS';
-document.querySelectorAll<HTMLButtonElement>('[data-assist]').forEach(button => {
-    button.addEventListener('click', () => {
-        if (!ready)
-            return;
-        const level = button.dataset.assist as AssistLevel;
-        game.setAssistLevel(level, false);
-        document.querySelector('#assist-description')!.textContent = assistDescriptions[level];
-    }, { signal });
-});
-const rivalDescriptions: Record<AssistLevel, string> = {
+const driverSetting = document.querySelector('#driver-assists')!;
+const rivalDescriptions: Record<OpponentDifficulty, string> = {
     easy: 'Measured rivals leave a larger braking and traffic margin.',
     normal: 'Competitive rivals balance commitment with safe traffic gaps.',
     hard: 'Fastest rivals brake later and carry more speed through clear corners.',
@@ -219,7 +223,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach(button
     button.addEventListener('click', () => {
         if (!ready)
             return;
-        const level = button.dataset.difficulty as AssistLevel;
+        const level = button.dataset.difficulty as OpponentDifficulty;
         game.setOpponentDifficulty(level, false);
         document.querySelector('#rival-description')!.textContent = rivalDescriptions[level];
     }, { signal });
@@ -368,10 +372,7 @@ game.init().then(() => {
     primary.disabled = false;
     primary.innerHTML = 'START RACE <span>↗</span>';
     hideLoading();
-    const selected = document.querySelector<HTMLButtonElement>('[data-assist].active')?.dataset.assist as AssistLevel | undefined;
-    if (selected)
-        document.querySelector('#assist-description')!.textContent = assistDescriptions[selected];
-    const rivals = document.querySelector<HTMLButtonElement>('[data-difficulty].active')?.dataset.difficulty as AssistLevel | undefined;
+    const rivals = document.querySelector<HTMLButtonElement>('[data-difficulty].active')?.dataset.difficulty as OpponentDifficulty | undefined;
     if (rivals)
         document.querySelector('#rival-description')!.textContent = rivalDescriptions[rivals];
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('go')) {

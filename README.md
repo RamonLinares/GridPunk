@@ -1,6 +1,6 @@
 # GridPunk
 
-A cyberpunk racing game set in **Neon District**. Three laps, six cars, 3.744 km of rain-soaked streets.
+A cyberpunk racing game set in **Neon District**. Three laps, six cars, and two rain-soaked street circuits: Neon District (3.744 km) and Kairo Loop (5.807 km).
 
 [Play GridPunk](https://gridpunk.smallweblab.com/) · [GitHub repository](https://github.com/RamonLinares/GridPunk)
 
@@ -8,14 +8,15 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, 3.744 km
 
 ## Play
 
-[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your car and press **Start race**.
+[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your circuit and car, then press **Start race**.
 
 ## What's included
 
+- Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover. Open directly with `?circuit=kairo`.
 - Shinsei ND-01 and Kurogane K89-R, with a mixed grid of five AI rivals.
 - Neon city, skyways, elevated/banked road sections, tunnel, wet surfaces, animated signs, flying traffic and video holograms.
 - Rain, engine and spatial hologram audio.
-- Driver assists, rival difficulty, automatic/performance/quality/extreme/cinematic graphics.
+- Fixed Rookie driver assists, independent rival difficulty, automatic/performance/quality/extreme/cinematic graphics.
 - Keyboard, gamepad and touch controls, multiple cameras, recovery, pause and restart.
 - Lap/sector timing, personal bests and lap replay/export.
 - Original Blender models, car source and asset build scripts.

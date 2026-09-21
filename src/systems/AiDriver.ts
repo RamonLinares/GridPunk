@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import type { Car } from '../entities/Car';
 import type { TrackSpline } from '../game/track/TrackSpline';
-import { DEFAULT_CONFIG, type AssistLevel, type VehicleInput } from './VehiclePhysics';
-// Rival pace is intentionally independent from VehiclePhysics assist presets.
+import { DEFAULT_CONFIG, type VehicleInput } from './VehiclePhysics';
+export type OpponentDifficulty = 'easy' | 'normal' | 'hard';
+// Rival pace is independent from the fixed Rookie driving aids.
 // The spread chiefly changes corner commitment and traffic gaps; every tier
 // keeps the same believable 1.4 s launch ramp and near-identical top speed.
-export const AI_DIFFICULTY_PACE: Record<AssistLevel, number> = { easy: .84, normal: .96, hard: 1.08 };
+export const AI_DIFFICULTY_PACE: Record<OpponentDifficulty, number> = { easy: .84, normal: .96, hard: 1.08 };
 /**
  * Lightweight racing-line follower. It aims at a speed-dependent look-ahead
  * point, brakes for the tightest curvature in the next stretch and keeps a
@@ -87,6 +88,9 @@ export class AiDriver {
                 continue;
             this.trafficCache.index = base;
             const otherProbe = this.spline.probe(other.position, this.trafficCache);
+            // Compare with this route at the other car, so traffic on a ramp
+            // stays visible while cars on the crossing’s other deck do not.
+            if (this.spline.circuit.gradeSeparated && Math.abs(other.position.y - otherProbe.height) > 2.5) continue;
             let along = otherProbe.sample.distance + otherProbe.segmentT * spacing - progress;
             if (along > this.spline.length / 2)
                 along -= this.spline.length;

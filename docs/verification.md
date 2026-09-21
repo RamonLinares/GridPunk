@@ -42,3 +42,11 @@ Generated local evidence is ignored by Git:
 No new assets were generated: the circuit, procedural city, models, video, textures and audio come from the owner's original game. Exact media provenance and hashes are in `public/data/asset-manifest.json`; asset rights notices remain in `public/credits.html` and `public/licenses/`. Historical upstream design notes are separately identified under `docs/upstream/`.
 
 The production build retains a large main JavaScript chunk (about 1.08 MB / 323 KB gzip), so Vite reports its existing size warning. The package remains a substantial Three.js scene; no performance redesign was requested. Mobile checks use Chrome touch emulation. Gamepad hardware, full replay export, and physical iOS/Android devices were not tested. Root-relative media paths assume deployment at a website root. The initial extraction was verified locally before publication; see [deployment verification](deployment.md) for the subsequent GitHub Pages setup.
+
+## Rookie-only driver assists — 21 September 2026
+
+Driver handling now uses a single fixed Rookie configuration. The other driver presets, mode setters, saved-mode loading and keyboard shortcuts were removed. Rival difficulty has its own type and remains independent. Existing Rookie lap records retain their storage keys.
+
+`npm test`: all six desktop/mobile production tests passed for both circuits. Coverage includes ignored legacy assist preferences, inactive former shortcuts, preserved Rookie lap records, independent rival difficulty and the existing driving/session controls. Desktop and mobile menu captures show only Rookie under Driver Assists.
+
+Full-field checks with Rookie physics and Sport rival pace completed two valid laps per car on both circuits: 188.97 simulated seconds for Neon District and 280.63 for Kairo Loop. No wall strikes, off-road time, stopped time or browser errors. Evidence: `artifacts/neon/browser-races.json`, `artifacts/kairo/browser-races.json`, and `artifacts/qa/{desktop,mobile}/{neon,kairo}/`.

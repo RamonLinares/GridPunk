@@ -1,6 +1,6 @@
 import type { TrackSpline } from '../game/track/TrackSpline';
 import { formatTime } from './Timing';
-import type { AssistLevel } from './VehiclePhysics';
+import type { OpponentDifficulty } from './AiDriver';
 export type HudProximity = 'left' | 'right' | 'both' | 'none';
 export interface HudState {
     speedKmh: number;
@@ -58,7 +58,7 @@ export class Hud {
       <div class="hud-warning" id="hud-warning">TRACK LIMITS <span>Ease off · rejoin safely</span></div>
       <div class="hud-message" id="hud-message" role="status" aria-live="polite"></div>
       <div class="hud-minimap"><div class="map-caption"><span>TRACK POSITION</span><b>${spline.circuit.mapCode}</b></div><canvas id="hud-minimap" width="320" height="280" role="img" aria-label="Live circuit map: red arrow is you, cyan dots are the five competitors, white square is start and finish"></canvas><div class="map-legend"><i></i> YOU <i class="rival-marker"></i> RIVALS <span>FINISH</span><b>▰</b></div></div>
-      <div class="hud-telemetry"><div class="driving-cue" id="hud-driving-cue" role="status" aria-live="polite" hidden><i></i><b id="hud-cue-label"></b><span id="hud-cue-target"></span></div><div class="shift-lights" id="hud-rpm" aria-label="Engine revolutions">${Array.from({ length: 15 }, () => '<i></i>').join('')}</div><div class="telemetry-main"><div class="gear"><span class="hud-label">GEAR</span><b id="hud-gear">N</b></div><div class="speed"><b id="hud-speed">0</b><span>KM/H</span></div><div class="pedals"><div class="pedal brake"><i id="hud-brake"></i></div><div class="pedal"><i id="hud-throttle"></i></div></div></div><div class="telemetry-footer"><span id="hud-assist-name">NORMAL ASSIST</span><div><b id="hud-tc" class="flag">TC</b><b id="hud-abs" class="flag">ABS</b><b id="hud-aero" class="flag">AUTO AERO</b></div></div></div>
+      <div class="hud-telemetry"><div class="driving-cue" id="hud-driving-cue" role="status" aria-live="polite" hidden><i></i><b id="hud-cue-label"></b><span id="hud-cue-target"></span></div><div class="shift-lights" id="hud-rpm" aria-label="Engine revolutions">${Array.from({ length: 15 }, () => '<i></i>').join('')}</div><div class="telemetry-main"><div class="gear"><span class="hud-label">GEAR</span><b id="hud-gear">N</b></div><div class="speed"><b id="hud-speed">0</b><span>KM/H</span></div><div class="pedals"><div class="pedal brake"><i id="hud-brake"></i></div><div class="pedal"><i id="hud-throttle"></i></div></div></div><div class="telemetry-footer"><span id="hud-assist-name">ROOKIE ASSIST</span><div><b id="hud-tc" class="flag">TC</b><b id="hud-abs" class="flag">ABS</b><b id="hud-aero" class="flag">AUTO AERO</b></div></div></div>
       <div class="driving-hint"><span><kbd>W A S D</kbd> DRIVE</span><span><kbd>SPACE</kbd> BRAKE</span><span><kbd>C</kbd> CAMERA</span><span><kbd>R</kbd> RECOVER</span></div>`;
         document.querySelector('#app')?.appendChild(this.root);
         for (const el of this.root.querySelectorAll<HTMLElement>('[id]'))
@@ -106,15 +106,7 @@ export class Hud {
     private project(x: number, z: number) {
         return { x: (x - this.minX) * this.scale + this.offsetX, y: (z - this.minZ) * this.scale + this.offsetY };
     }
-    setAssistLevel(level: AssistLevel): void {
-        this.els['hud-assist-name'].textContent = `${level.toUpperCase()} ASSIST`;
-        document.querySelectorAll<HTMLButtonElement>('[data-assist]').forEach(btn => {
-            const active = btn.dataset.assist === level;
-            btn.classList.toggle('active', active);
-            btn.setAttribute('aria-pressed', String(active));
-        });
-    }
-    setOpponentDifficulty(level: AssistLevel): void {
+    setOpponentDifficulty(level: OpponentDifficulty): void {
         document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach(btn => {
             const active = btn.dataset.difficulty === level;
             btn.classList.toggle('active', active);

@@ -60,10 +60,8 @@ export const DEFAULT_CONFIG: VehicleConfig = {
   maxRpm: 15000,
 };
 
-export type AssistLevel = 'easy' | 'normal' | 'hard';
-
 /**
- * Driving-aid presets. `tc` caps drive as a fraction of rear grip (lower =
+ * Fixed Rookie driving aids. `tc` caps drive as a fraction of rear grip (lower =
  * more lateral headroom), `esc` scales the yaw-rate stability control, `bleed`
  * scales side-slip damping, `steer` scales steering lock, `clamp` limits yaw
  * rate and `steerRate` scales how fast the wheel turns.
@@ -75,7 +73,7 @@ export type AssistLevel = 'easy' | 'normal' | 'hard';
  * for, in m/s², which stops the lock from staying so large at speed that a
  * key tap yaws the car several degrees. `lockTime` keeps the time to reach
  * full lock constant, so the wheel no longer swings straight to a tiny lock
- * within a single frame at 250 km/h. Zero disables either. `servoFloor` is
+ * within a single frame at 250 km/h. `servoFloor` is
  * the stability servo's authority before side-slip builds (0.4 is the raw
  * value) and `servoGainFloor` a floor on its error-proportional gain: both
  * make the yaw rate follow the wheel sooner on turn-in and die away sooner
@@ -83,14 +81,10 @@ export type AssistLevel = 'easy' | 'normal' | 'hard';
  * big lock. A tap and the first 300 ms of a held press are the same physics,
  * so these values are a chosen balance, not a decoupling.
  */
-export const ASSIST_PRESETS: Record<AssistLevel, {
-  tc: number; esc: number; bleed: number; steer: number; clamp: number; steerRate: number;
-  lateralCap: number; lockTime: number; servoFloor: number; servoGainFloor: number;
-}> = {
-  easy: { tc: 0.62, esc: 1.8, bleed: 1.7, steer: 0.85, clamp: 1.0, steerRate: 0.8, lateralCap: 64, lockTime: 0.18, servoFloor: 0.85, servoGainFloor: 1.4 },
-  normal: { tc: 0.72, esc: 1.0, bleed: 1.0, steer: 1.0, clamp: 1.6, steerRate: 1.0, lateralCap: 80, lockTime: 0.10, servoFloor: 0.6, servoGainFloor: 1.0 },
-  hard: { tc: 0.92, esc: 0.35, bleed: 0.45, steer: 1.12, clamp: 2.4, steerRate: 1.25, lateralCap: 0, lockTime: 0, servoFloor: 0.4, servoGainFloor: 0 },
-};
+export const ROOKIE_ASSISTS = {
+  tc: 0.62, esc: 1.8, bleed: 1.7, steer: 0.85, clamp: 1.0, steerRate: 0.8,
+  lateralCap: 64, lockTime: 0.18, servoFloor: 0.85, servoGainFloor: 1.4,
+} as const;
 
 export interface Telemetry {
   speed: number;
@@ -141,8 +135,7 @@ export class VehiclePhysics {
   private aLat = 0;
   private lastRumble = 0;
   private shiftTimer = 0;
-  private assists = { tc: true, abs: true };
-  private assistLevel: AssistLevel = 'normal';
+  private readonly assists = { tc: true, abs: true };
   private driverSteering = false;
 
   constructor(cfg: Partial<VehicleConfig> = {}) {
@@ -171,26 +164,13 @@ export class VehiclePhysics {
     });
   }
 
-  setAssists(tc: boolean, abs: boolean): void {
-    this.assists.tc = tc;
-    this.assists.abs = abs;
-  }
-
   getAssists(): { tc: boolean; abs: boolean } {
     return { ...this.assists };
   }
 
-  setAssistLevel(level: AssistLevel): void {
-    this.assistLevel = level;
-  }
-
-  getAssistLevel(): AssistLevel {
-    return this.assistLevel;
-  }
-
   /**
-   * Enables the preset's human steering ergonomics (`lateralCap`, `lockTime`).
-   * Off by default so rivals and the recorded handling baselines are unchanged.
+   * Enables Rookie’s human steering ergonomics (`lateralCap`, `lockTime`).
+   * Off by default for the AI controller’s raw steering response.
    */
   setDriverSteering(enabled: boolean): void {
     this.driverSteering = enabled;
@@ -203,13 +183,13 @@ export class VehiclePhysics {
   /** Full hairpin lock at low speed; retain the established fast-corner feel. */
   getSteeringLimit(): number {
     const speed = Math.abs(this.vLong);
-    const aid = ASSIST_PRESETS[this.assistLevel];
+    const aid = ROOKIE_ASSISTS;
     const fastLock = this.cfg.maxSteer * aid.steer * Math.max(.12, 1 / (1 + speed * .075));
     // The previous reduction already removed half the lock at 40 km/h, and
     // Rookie removed another 15%. Slowing down must make tight turns possible.
     const blend = THREE.MathUtils.smoothstep(speed, 8, 25);
     const limit = THREE.MathUtils.lerp(this.cfg.maxSteer * 1.3, fastLock, blend);
-    if (!this.driverSteering || aid.lateralCap <= 0) return limit;
+    if (!this.driverSteering) return limit;
     // The stability control steers the yaw rate to v·tan(δ)/L, so full lock
     // asks for v²·tan(δ)/L of lateral acceleration. Bound that demand: the
     // 1/(1+0.075v) lock above only shrinks linearly, which left a tap at
@@ -242,14 +222,14 @@ export class VehiclePhysics {
   step(dt: number, input: VehicleInput, surface: SurfaceInfo): void {
     if (!(dt > 0) || dt > 0.1) return;
     const cfg = this.cfg;
-    const aid = ASSIST_PRESETS[this.assistLevel];
+    const aid = ROOKIE_ASSISTS;
     this.lastRumble = surface.rumble;
 
     // --- Steering with adjustable lock and speed sensitivity ---
     const maxSteer = this.getSteeringLimit();
     const steerTarget = input.steer * maxSteer;
     let steerRate = cfg.steerSpeed * aid.steerRate * dt;
-    if (this.driverSteering && aid.lockTime > 0) {
+    if (this.driverSteering) {
       // Keep the time to full lock constant as the lock shrinks with speed,
       // so a key tap builds a fraction of the lock instead of all of it.
       // Unwinding towards centre stays twice as quick so the car straightens.
@@ -261,16 +241,10 @@ export class VehiclePhysics {
     const v = Math.max(Math.abs(this.vLong), 1.0);
     const a = cfg.cogToFront;
     const b = cfg.wheelbase - cfg.cogToFront;
-    // At hairpin speeds the stiff dynamic tyre model fights the large steering
-    // lock and manufactures rear slip. Blend to rolling bicycle geometry on
-    // grippy tarmac. Expert's weaker stability control needs this support
-    // through corner exit too: fading it out at 65 km/h caused a sudden slide
-    // as the driver accelerated out of a slow turn. Faster corners above
-    // 126 km/h retain Expert's dynamic response; other presets are unchanged.
+    // At hairpin speeds, blend to rolling bicycle geometry on grippy tarmac.
     // Loose surfaces and deliberate handbrake slides retain their dynamics.
-    const expert = this.assistLevel === 'hard';
     const rollingGrip = input.handbrake ? 0
-      : (1 - THREE.MathUtils.smoothstep(Math.abs(this.vLong), expert ? 18 : 8, expert ? 35 : 18))
+      : (1 - THREE.MathUtils.smoothstep(Math.abs(this.vLong), 8, 18))
         * THREE.MathUtils.smoothstep(surface.mu, .8, 1.2);
 
     // --- Slip angles ---

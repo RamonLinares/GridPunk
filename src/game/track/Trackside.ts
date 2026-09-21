@@ -37,7 +37,7 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
     const MIN = 8.4; // keep props off the racing surface
     // ---------------- Advertising banners on the barriers ----------------
     const bannerTexts: [string, string, string, string][] = [
-        ['NEON DISTRICT', '#10152b', '#63f8ff', 'RACE THE NIGHT'],
+        [builder.spline.circuit.shortName.toUpperCase(), '#10152b', '#63f8ff', 'RACE THE NIGHT'],
         ['GRIDPUNK', '#20132e', '#ff92cd', 'AFTER DARK'],
     ];
     // One placement schedule per barrier, shared by all five designs. The old

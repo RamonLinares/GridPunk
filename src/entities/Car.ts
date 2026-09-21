@@ -229,7 +229,7 @@ export class Car {
         // player sees. Centreline height omits the road lift, kerbs and lower verges.
         for (const contact of this.wheelMounts) {
             const { mount } = contact;
-            contact.height = this.builder.drivingSurface.heightAt(p.x + cos * mount.x + sin * mount.z, p.z - sin * mount.x + cos * mount.z, undefined, undefined) ?? probe.height;
+            contact.height = this.builder.drivingSurface.heightAt(p.x + cos * mount.x + sin * mount.z, p.z - sin * mount.x + cos * mount.z, undefined, this.builder.spline.circuit.gradeSeparated ? probe.height : undefined) ?? probe.height;
         }
         const [fl, fr, rl, rr] = this.wheelMounts;
         const groundY = (fl.height + fr.height + rl.height + rr.height) / 4;
@@ -299,7 +299,7 @@ export class Car {
             // of visiting every below-axis vertex in the 40-segment LatheGeometry.
             this.wheelOrientation.copy(this.group.quaternion).multiply(wheel.quaternion).multiply((wheel.userData.spin as THREE.Object3D).quaternion);
             this.wheelAxis.set(1, 0, 0).applyQuaternion(this.wheelOrientation).normalize();
-            const referenceY = undefined;
+            const referenceY = this.builder.spline.circuit.gradeSeparated ? this.physics.position.y : undefined;
             const radialPoint = (axial: number, radius: number, radial: THREE.Vector3) => this.tyrePoint.copy(this.wheelCenter).addScaledVector(this.wheelAxis, axial).addScaledVector(radial, radius);
             const snapRadialVertex = (direction: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 => {
                 this.inverseWheelOrientation.copy(this.wheelOrientation).invert();

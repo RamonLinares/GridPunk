@@ -1,4 +1,4 @@
-import { neonBankAt, neonTunnelAt, NEON_TUNNEL } from './track/NeonProfile';
+import { neonBankAt as districtBankAt, neonTunnelAt as districtTunnelAt, NEON_TUNNEL } from './track/NeonProfile';
 import { createNeonTunnel } from './NeonTunnel';
 import { createNeonAirTraffic } from './NeonAirTraffic';
 import {createNeonLedMaterial,updateNeonLedSigns,setNeonLedCinematic} from './NeonLedSigns';
@@ -19,6 +19,8 @@ import { SunLighting } from '../systems/SunLighting';
 // Original procedural city geometry and surfaces, with an original generated
 // advertising atlas. Seeded placement keeps clearance and views reproducible.
 export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
+ const neonTunnelAt = (p: number) => builder.spline.circuitId === 'neon' && districtTunnelAt(p);
+ const neonBankAt = (p: number) => builder.spline.circuitId === 'neon' ? districtBankAt(p) : (builder.spline.circuit.surfaceLiftAt?.(p) ?? 0);
   const group = new THREE.Group(); group.name = 'neon-city'; scene.add(group); scene.userData.neon = true;
   group.userData.sceneryContainer = true;
   const atmosphereLights: NeonAtmosphereLight[] = [];
@@ -28,7 +30,7 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   group.userData.billboards=billboards.placements;
   const shops=createNeonShopfronts(group,builder);
   const architecture=createNeonArchitecture(group);
-  const tunnel=createNeonTunnel(builder,atmosphereLights);group.add(tunnel.group);
+  const tunnel=builder.spline.circuitId === 'neon' ? createNeonTunnel(builder,atmosphereLights) : undefined;if(tunnel)group.add(tunnel.group);
   const tunnelCache={index:0};
   let seed = 7301;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -213,7 +215,11 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   const streetLamps=streetLife.userData.lampPositions as THREE.Vector3[];
   // Mid-rise blocks, stepped megatowers and a distant skyline, all with
   // deterministic spacing. One instanced draw per material, not per window.
-  for(let x=-950;x<=950;x+=68)for(let z=-950;z<=1000;z+=68){
+  const cityBounds = new THREE.Box3().setFromPoints(builder.spline.samples.map(s => s.position));
+  const minX = builder.spline.circuitId === 'neon' ? -950 : Math.min(-950, Math.floor((cityBounds.min.x - 350) / 68) * 68);
+  const maxX = Math.max(950, cityBounds.max.x + 350);
+  const minZ = Math.min(-950, cityBounds.min.z - 350), maxZ = Math.max(1000, cityBounds.max.z + 350);
+  for(let x=minX;x<=maxX;x+=68)for(let z=minZ;z<=maxZ;z+=68){
     const px=x+(rand()-.5)*20,pz=z+(rand()-.5)*20;
     addBuilding(px,pz,25+rand()*25,25+rand()*25,80+Math.pow(rand(),2)*290,0,false);
   }
@@ -253,7 +259,7 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   // road instead of leaving a featureless lot between city and race wall.
   for(const side of[-1,1]){
     const positions:number[]=[],uvs:number[]=[],indices:number[]=[];
-    for(let i=0;i<=builder.spline.count;i++){const s=builder.spline.sampleAt(i);for(const offset of[12.4,18]){const p=s.position.clone().addScaledVector(s.right,side*offset);positions.push(p.x,offset===12.4?p.y+.025:.025,p.z);uvs.push(offset/3,s.distance/3);}if(i){const a=(i-1)*2,b=i*2;indices.push(a,b,a+1,b,b+1,a+1);}}
+    for(let i=0;i<=builder.spline.count;i++){const s=builder.spline.sampleAt(i);for(const offset of[12.4,18]){const p=s.position.clone().addScaledVector(s.right,side*offset);positions.push(p.x,builder.spline.circuit.gradeSeparated?p.y+.025:offset===12.4?p.y+.025:.025,p.z);uvs.push(offset/3,s.distance/3);}if(i){const a=(i-1)*2,b=i*2;indices.push(a,b,a+1,b,b+1,a+1);}}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();const m=concrete.clone();m.side=THREE.DoubleSide;const mesh=new THREE.Mesh(g,m);mesh.name='neon-sidewalk-ground';mesh.receiveShadow=true;group.add(mesh);
   }
   // Practical route studs, not continuous neon rails. The street remains a
@@ -292,9 +298,9 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   for(let i=0;i<850;i++){const x=(rand()-.5)*100,z=(rand()-.5)*100,y=rand()*48;rainPositions.push(x,0,z,x+.08,.7+rand()*.6,z);rainPhases.push(y,y);}
   const rainGeometry=new THREE.BufferGeometry();rainGeometry.setAttribute('position',new THREE.Float32BufferAttribute(rainPositions,3));rainGeometry.setAttribute('aPhase',new THREE.Float32BufferAttribute(rainPhases,1));
   const shelter=Array.from({length:16},(_,i)=>{const s=builder.spline.sampleAt(Math.round(THREE.MathUtils.lerp(NEON_TUNNEL.start,NEON_TUNNEL.end,i/15)*builder.spline.count));return new THREE.Vector2(s.position.x,s.position.z);});
-  const rainMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0},uShelter:{value:shelter}},vertexShader:`attribute float aPhase;uniform float uTime;uniform vec2 uShelter[16];varying float fade;void main(){vec3 p=position;p.y+=mod(aPhase-uTime*15.,48.);vec4 mv=modelViewMatrix*vec4(p,1.);fade=clamp(1.-length(mv.xyz)/60.,0.,1.);
+  const rainMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0},uShelter:{value:shelter},uHasShelter:{value:builder.spline.circuitId === 'neon' ? 1 : 0}},vertexShader:`attribute float aPhase;uniform float uTime;uniform float uHasShelter;uniform vec2 uShelter[16];varying float fade;void main(){vec3 p=position;p.y+=mod(aPhase-uTime*15.,48.);vec4 mv=modelViewMatrix*vec4(p,1.);fade=clamp(1.-length(mv.xyz)/60.,0.,1.);
  vec3 world=(modelMatrix*vec4(p,1.)).xyz;
- if(world.y<8.2)for(int i=0;i<15;i++){vec2 d=uShelter[i+1]-uShelter[i];float t=dot(world.xz-uShelter[i],d)/dot(d,d);if(t>=0.&&t<=1.&&length(world.xz-uShelter[i]-d*t)<22.)fade=0.;}
+ if(uHasShelter>.5&&world.y<8.2)for(int i=0;i<15;i++){vec2 d=uShelter[i+1]-uShelter[i];float t=dot(world.xz-uShelter[i],d)/dot(d,d);if(t>=0.&&t<=1.&&length(world.xz-uShelter[i]-d*t)<22.)fade=0.;}
  gl_Position=projectionMatrix*mv;}`,fragmentShader:'varying float fade;void main(){gl_FragColor=vec4(.55,.74,.8,fade*.22);}'});
   const rain=new THREE.LineSegments(rainGeometry,rainMaterial);rain.frustumCulled=false;rain.name='neon-rain';group.add(rain);
   const wetRoad=createWetRoad(builder);group.add(wetRoad);
@@ -331,7 +337,7 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   let cinematic=false;
   const airTraffic=createNeonAirTraffic(group,builder);
   const hologram=createNeonHologram(group,atmosphereLights,builder);
-  return {group,ready:Promise.all([landmarks.ready,tunnel.ready]).then(()=>{}),holograms:hologram.audioScene,koiHolograms:hologram.koiAudioScene,disposeExtraResources:()=>{wetRoad.getRenderTarget().dispose();hologram.dispose();landmarks.dispose();tunnel.dispose();billboards.dispose();},sun:sunLighting.sun,sunLighting,sky,
+  return {group,ready:Promise.all([landmarks.ready,tunnel?.ready]).then(()=>{}),holograms:hologram.audioScene,koiHolograms:hologram.koiAudioScene,disposeExtraResources:()=>{wetRoad.getRenderTarget().dispose();hologram.dispose();landmarks.dispose();tunnel?.dispose();billboards.dispose();},sun:sunLighting.sun,sunLighting,sky,
     update(focus,seconds=0){
       updateNeonLedSigns(seconds);
       const progress=focus?builder.spline.nearestSample(focus,tunnelCache).index/builder.spline.count:0;
@@ -339,7 +345,7 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
 
       hologram.update(focus);
       landmarks.update(focus,seconds);
-      tunnel.update(focus,seconds);
+      tunnel?.update(focus,seconds);
       shops.update(focus,seconds);
       wetRoad.material.uniforms.uTime.value=seconds;rainMaterial.uniforms.uTime.value=seconds;
       if(focus){rain.position.set(focus.x,0,focus.z);}

@@ -1,4 +1,5 @@
 import { NEON_TUNNEL, neonRainExposure } from './track/NeonProfile';
+import { createKairoCityBridge } from './KairoCityBridge';
 import { selectedCircuit } from './track/circuits';
 import * as THREE from 'three';
 import { disposeObject3D } from '../utils/dispose';
@@ -21,9 +22,9 @@ import { Hud } from '../systems/Hud';
 import { Timing } from '../systems/Timing';
 import { readPersonalBest, savePersonalBest } from '../systems/PersonalBests';
 import { AudioSystem } from '../systems/AudioSystem';
-import { AiDriver, AI_DIFFICULTY_PACE } from '../systems/AiDriver';
+import { AiDriver, AI_DIFFICULTY_PACE, type OpponentDifficulty } from '../systems/AiDriver';
 import { CarContacts } from '../systems/CarContacts';
-import type { AssistLevel, VehicleInput } from '../systems/VehiclePhysics';
+import type { VehicleInput } from '../systems/VehiclePhysics';
 import { PostProcessing } from '../systems/PostProcessing';
 import { MapOverlay } from '../systems/MapOverlay';
 import { DrivingGuide } from '../systems/DrivingGuide';
@@ -80,8 +81,7 @@ export class Game {
     private readonly heldInput: VehicleInput = { throttle: 0, brake: 0, steer: 0, handbrake: true };
     private playerPrev = 0;
     private position = 1;
-    private assistLevel: AssistLevel = 'normal';
-    private opponentDifficulty: AssistLevel = 'normal';
+    private opponentDifficulty: OpponentDifficulty = 'normal';
     private personalBest: number | null = null;
     private newPersonalBest = false;
     private readonly loop = new Loop((delta, elapsed) => this.update(delta, elapsed), () => this.render());
@@ -173,6 +173,7 @@ export class Game {
         }
         this.builder = new TrackBuilder(this.spline, this.materials);
         this.scene.add(this.builder.group);
+        if (this.spline.circuitId === 'kairo') this.scene.add(createKairoCityBridge(this.builder, this.materials));
         await yieldToBrowser();
         this.environment = createEnvironment(this.scene, this.builder, this.camera);
         await this.environment.ready;
@@ -213,7 +214,7 @@ export class Game {
         await yieldToBrowser();
         const cameraObstructions: THREE.Object3D[] = [];
         this.scene.traverse(object => {
-            if (object.name === 'neon-tunnel-shell')
+            if (object.name === 'neon-tunnel-shell' || object.name === 'kairo-flyover-deck')
                 cameraObstructions.push(object);
         });
         this.cameraRig = new CameraRig(this.camera, cameraObstructions);
@@ -265,7 +266,6 @@ export class Game {
         probe.traverse(object => { (object as THREE.Mesh).geometry?.dispose(); });
         pmrem.dispose();
         await yieldToBrowser();
-        this.setAssistLevel(this.loadAssistLevel(), false);
         this.setOpponentDifficulty(this.loadOpponentDifficulty(), false);
         this.input.onAction((action) => {
             if (this.replay) {
@@ -287,14 +287,6 @@ export class Game {
                 this.cycleMapSurface();
             if (action === 'pause')
                 this.togglePause();
-            if (action === 'assistEasy')
-                this.setAssistLevel('easy');
-            if (action === 'assistNormal')
-                this.setAssistLevel('normal');
-            if (action === 'assistHard')
-                this.setAssistLevel('hard');
-            if (action === 'assistCycle')
-                this.cycleAssistLevel();
         });
         if (this.devMode) {
             this.mapOverlay = new MapOverlay(this.canvas.parentElement ?? document.body);
@@ -551,7 +543,7 @@ export class Game {
         const slot = this.builder.gridSlot(5);
         this.car.resetAt(slot.index, slot.lateral);
         this.timing.reset();
-        this.personalBest = readPersonalBest(this.assistLevel, this.spline.circuitId);
+        this.personalBest = readPersonalBest(this.spline.circuitId);
         this.newPersonalBest = false;
         this.countdown = 3.999;
         this.started = false;
@@ -621,7 +613,7 @@ export class Game {
         return { lap, holograms: [this.environment.holograms, this.environment.koiHolograms].filter((s): s is NonNullable<typeof s> => !!s),
             rain: true, exposure: (position: THREE.Vector3) => {
                 const progress = this.spline.progressAt(position, { index: 0 });
-                return { tunnel: this.tunnelMixAt(progress), rain: neonRainExposure(progress / this.spline.length, this.spline.length) };
+                return { tunnel: this.tunnelMixAt(progress), rain: this.rainExposureAt(progress) };
             } };
     }
     beginReplay(): boolean {
@@ -686,7 +678,7 @@ export class Game {
         if (this.replay.playing && !this.replay.exporting) {
             const motion = replayMotion(this.replayRecorder.last!, time), progress = this.spline.progressAt(motion.position, { index: 0 });
             this.audio.update(frame.telemetry, Math.max(.001, dt), this.tunnelMixAt(progress));
-            this.audio.updateRain(neonRainExposure(progress / this.spline.length, this.spline.length));
+            this.audio.updateRain(this.rainExposureAt(progress));
             this.audio.updateHolograms(this.environment.holograms, motion.position, motion.velocity, motion.right.x, motion.right.z);
             this.audio.updateHolograms(this.environment.koiHolograms, motion.position, motion.velocity, motion.right.x, motion.right.z, 'koi');
         }
@@ -868,7 +860,7 @@ export class Game {
             if (personalBest && last !== null) {
                 this.personalBest = last;
                 this.newPersonalBest = true;
-                savePersonalBest(this.assistLevel, last, this.spline.circuitId);
+                savePersonalBest(last, this.spline.circuitId);
             }
             const lapLabel = record?.valid === false ? `LAP ${timingResult.lapCompleted} · INVALID`
                 : personalBest ? 'PERSONAL BEST' : `LAP ${timingResult.lapCompleted}`;
@@ -922,7 +914,7 @@ export class Game {
         // Audio + VFX tied to telemetry.
         const tunnelMix = this.tunnelMixAt(progress);
         this.audio.update(telemetry, delta, tunnelMix);
-        this.audio.updateRain(neonRainExposure(progress / this.spline.length, this.spline.length));
+        this.audio.updateRain(this.rainExposureAt(progress));
         this.audio.updateHolograms(this.environment.holograms, this.car.physics.position, this.car.physics.velocity, this.camera.matrixWorld.elements[0], this.camera.matrixWorld.elements[2]);
         this.audio.updateHolograms(this.environment.koiHolograms, this.car.physics.position, this.car.physics.velocity, this.camera.matrixWorld.elements[0], this.camera.matrixWorld.elements[2], 'koi');
         this.audio.updateRivals(this.rivals.map((rival, id) => ({ rival, id })).filter(({}) => true).map(({ rival, id }) => {
@@ -957,7 +949,7 @@ export class Game {
         }
         this.environment.updateShadows();
         this.post.update(delta, telemetry);
-        this.guide.enabled = this.assistLevel !== 'hard' && !this.mapMode;
+        this.guide.enabled = !this.mapMode;
         const drivingCue = this.guide.update(this.car, {
             dt: delta,
             throttle: input.throttle,
@@ -1024,7 +1016,7 @@ export class Game {
             for (let i = 0; i < vertices.count; i++) {
                 const x = ((i % 5) / 4 - 0.5) * 3, z = (Math.floor(i / 5) / 8 - 0.5) * 6.4;
                 const dx = cosYaw * x + sinYaw * z, dz = -sinYaw * x + cosYaw * z;
-                const y = this.builder.drivingSurface.heightAt(position.x + dx, position.z + dz, undefined, undefined) ?? position.y;
+                const y = this.builder.drivingSurface.heightAt(position.x + dx, position.z + dz, undefined, this.spline.circuit.gradeSeparated ? position.y : undefined) ?? position.y;
                 vertices.setXYZ(i, dx, y + 0.012 - position.y, dz);
             }
             vertices.needsUpdate = true;
@@ -1145,34 +1137,7 @@ export class Game {
                 mesh.instanceMatrix.needsUpdate = true;
             });
     }
-    private loadAssistLevel(): AssistLevel {
-        try {
-            const saved = localStorage.getItem('gridpunk:assist-level');
-            if (saved === 'easy' || saved === 'normal' || saved === 'hard')
-                return saved;
-        }
-        catch {
-        }
-        return 'normal';
-    }
-    setAssistLevel(level: AssistLevel, announce = true): void {
-        if (level !== this.assistLevel) {
-            if (this.started)
-                this.timing.invalidateLap();
-            this.personalBest = readPersonalBest(level, this.spline.circuitId);
-            this.newPersonalBest = false;
-        }
-        this.assistLevel = level;
-        this.car.physics.setAssistLevel(level);
-        try {
-            localStorage.setItem('gridpunk:assist-level', level);
-        }
-        catch { /* ignore */ }
-        this.hud.setAssistLevel(level);
-        if (announce)
-            this.hud.showMessage(`ASSIST: ${level.toUpperCase()}`, 1.4);
-    }
-    setOpponentDifficulty(level: AssistLevel, announce = true): void {
+    setOpponentDifficulty(level: OpponentDifficulty, announce = true): void {
         if (level !== this.opponentDifficulty) {
             if (this.started)
                 this.timing.invalidateLap();
@@ -1189,7 +1154,7 @@ export class Game {
         if (announce)
             this.hud.showMessage(`RIVALS: ${level.toUpperCase()}`, 1.4);
     }
-    private loadOpponentDifficulty(): AssistLevel {
+    private loadOpponentDifficulty(): OpponentDifficulty {
         try {
             const saved = localStorage.getItem('gridpunk:opponent-difficulty');
             if (saved === 'easy' || saved === 'normal' || saved === 'hard')
@@ -1197,11 +1162,6 @@ export class Game {
         }
         catch { /* ignore */ }
         return 'normal';
-    }
-    private cycleAssistLevel(): void {
-        const order: AssistLevel[] = ['easy', 'normal', 'hard'];
-        const next = order[(order.indexOf(this.assistLevel) + 1) % order.length];
-        this.setAssistLevel(next);
     }
     private loadQualityPreset(): QualityPreset {
         try {
@@ -1224,7 +1184,11 @@ export class Game {
                 post: state.level > 0,
             } }));
     }
+    private rainExposureAt(progressMetres: number): number {
+        return this.spline.circuitId === 'neon' ? neonRainExposure(progressMetres / this.spline.length, this.spline.length) : 1;
+    }
     private tunnelMixAt(progressMetres: number): number {
+        if (this.spline.circuitId !== 'neon') return 0;
         const entry = (NEON_TUNNEL.start) * this.spline.length;
         const exit = (NEON_TUNNEL.end) * this.spline.length;
         const enter = THREE.MathUtils.smoothstep(progressMetres, entry - 18, entry + 22);
@@ -1261,7 +1225,7 @@ export class Game {
             collisionImpulse = Math.max(collisionImpulse, hit.collisionImpulse);
             for (let i = 0; i < this.rivals.length; i++)
                 this.rivals[i].car.update(fixed, this.simulationInputs[i], false);
-            contactImpulse = Math.max(contactImpulse, this.contacts.resolve(bodies, fixed, false, (index, previousX, previousZ, previousYaw) => {
+            contactImpulse = Math.max(contactImpulse, this.contacts.resolve(bodies, fixed, !!this.spline.circuit.gradeSeparated, (index, previousX, previousZ, previousYaw) => {
                 const contactBarrier = cars[index].reconcileBarrier(previousX, previousZ, previousYaw);
                 if (index === 0 && contactBarrier.collided) {
                     collided = true;
@@ -1314,7 +1278,7 @@ export class Game {
             sunIntensity: this.environment.sun.intensity,
             cameraPosition: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
             lap: this.timing.lap,
-            assistLevel: this.assistLevel,
+            assistLevel: 'rookie',
             opponentDifficulty: this.opponentDifficulty,
             quality: {
                 ...this.qualityController.getState(),

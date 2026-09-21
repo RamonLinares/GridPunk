@@ -1,9 +1,11 @@
-import { neonBankAt, neonTunnelAt } from './track/NeonProfile';
+import { neonBankAt as districtBankAt, neonTunnelAt as districtTunnelAt } from './track/NeonProfile';
 import * as THREE from 'three';
 import type {TrackBuilder} from './track/TrackBuilder';
 
 /** Human-scale street furniture, commuters and parked delivery scooters. */
 export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THREE.Group {
+ const neonTunnelAt = (p: number) => builder.spline.circuitId === 'neon' && districtTunnelAt(p);
+ const neonBankAt = (p: number) => builder.spline.circuitId === 'neon' ? districtBankAt(p) : (builder.spline.circuit.surfaceLiftAt?.(p) ?? 0);
  const group=new THREE.Group();group.name='neon-pavement-life';
  const box=new THREE.BoxGeometry(1,1,1),coat=new THREE.CylinderGeometry(.2,.28,1,7),head=new THREE.SphereGeometry(.12,7,5),umbrella=new THREE.SphereGeometry(1,12,6,0,Math.PI*2,0,Math.PI/2),wheel=new THREE.CylinderGeometry(.22,.22,.1,12);
  const materials=[new THREE.MeshStandardMaterial({color:0x20282b,roughness:.9}),new THREE.MeshStandardMaterial({color:0x74655b,roughness:.86}),new THREE.MeshStandardMaterial({color:0x435f63,roughness:.74}),new THREE.MeshStandardMaterial({color:0x67494b,roughness:.8}),new THREE.MeshStandardMaterial({color:0xa58c76,roughness:.95})];
@@ -14,7 +16,7 @@ export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THR
  const lampPositions:THREE.Vector3[]=[];
  for(let i=3;i<builder.spline.count;i+=11){
   if(neonTunnelAt(i/builder.spline.count))continue;
-  const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*14.8);base.y=0;
+  const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*14.8);base.y=builder.spline.circuit.gradeSeparated?s.position.y:0;
   if(builder.distanceToTrack(base.x,base.z)<13.8)continue;
   const angle=Math.atan2(s.tangent.x,s.tangent.z);
   const at=(u:number,y:number)=>base.clone().addScaledVector(s.right,u).add(new THREE.Vector3(0,y,0));

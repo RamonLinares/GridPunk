@@ -4,13 +4,14 @@ import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type {TrackBuilder} from './track/TrackBuilder';
 import type {NeonAtmosphereLight} from '../systems/NeonAtmospherePass';
-import {neonTunnelAt} from './track/NeonProfile';
+import {neonTunnelAt as districtTunnelAt} from './track/NeonProfile';
 import {disposeObject3D} from '../utils/dispose';
 import type {NeonBillboards} from './NeonBillboards';
 
 interface Placement {x:number;z:number;r:number;angle:number;variant:number;fraction:number;side:number;adIndex:number}
 /** Three Blender-authored silhouettes, actual bridge connections and local dressing. */
 export function createNeonLandmarks(parent:THREE.Group,builder:TrackBuilder,lights:NeonAtmosphereLight[],billboards:NeonBillboards){
+ const neonTunnelAt = (p: number) => builder.spline.circuitId === 'neon' && districtTunnelAt(p);
  const group=new THREE.Group();group.name='neon-blender-districts';group.userData.sceneryContainer=true;parent.add(group);
  const placements:Placement[]=[],pairs:{fraction:number;left:Placement;right:Placement}[]=[];
  const variants=['exchange','terraces','split-spire'];

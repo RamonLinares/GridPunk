@@ -8,11 +8,7 @@ export type DiscreteAction =
   | 'lights'
   | 'map'
   | 'grid'
-  | 'mapSurface'
-  | 'assistEasy'
-  | 'assistNormal'
-  | 'assistHard'
-  | 'assistCycle';
+  | 'mapSurface';
 
 export class InputController {
   private readonly keys = new Set<string>();
@@ -36,10 +32,6 @@ export class InputController {
     if (event.code === 'KeyM') this.emit('map');
     if (event.code === 'KeyG') this.emit('grid');
     if (event.code === 'KeyT') this.emit('mapSurface');
-    if (event.code === 'Digit1') this.emit('assistEasy');
-    if (event.code === 'Digit2') this.emit('assistNormal');
-    if (event.code === 'Digit3') this.emit('assistHard');
-    if (event.code === 'KeyE') this.emit('assistCycle');
   };
 
   private readonly onKeyUp = (event: KeyboardEvent) => {

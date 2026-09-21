@@ -80,6 +80,17 @@ export class TrackBuilder {
         }
     }
     private detectCorners(): void {
+        if (this.spline.circuit.cornerMarkers) {
+            this.spline.circuit.cornerMarkers.forEach((marker, index) => {
+                const apex = Math.round(marker.progress * this.n) % this.n;
+                const sample = this.spline.sampleAt(apex);
+                this.corners.push({ number: index + 1, name: marker.name,
+                    direction: sample.curvature > 0 ? 'right' : 'left',
+                    startIndex: (apex - 5 + this.n) % this.n, apexIndex: apex, endIndex: (apex + 5) % this.n,
+                    apexDistance: sample.distance, minRadius: 1 / Math.max(.0001, Math.abs(sample.curvature)) });
+            });
+            return;
+        }
         const curv = smooth(this.spline.samples.map((s) => s.curvature), 3);
         const threshold = 0.0075;
         let inCorner = false;
@@ -124,8 +135,8 @@ export class TrackBuilder {
      * The index is populated before scenery is constructed; outside its extent
      * the terrain sampler provides the existing clamped fallback.
      */
-    surfaceHeightAt(x: number, z: number, _referenceY?: number): number {
-        return this.drivingSurface.heightAt(x, z, undefined, undefined) ?? this.terrainHeightAt(x, z);
+    surfaceHeightAt(x: number, z: number, referenceY?: number): number {
+        return this.drivingSurface.heightAt(x, z, undefined, this.spline.circuit.gradeSeparated ? referenceY : undefined) ?? this.terrainHeightAt(x, z);
     }
     /** Minimum horizontal distance from a world point to any part of the track. */
     distanceToTrack(x: number, z: number): number {
@@ -227,7 +238,7 @@ export class TrackBuilder {
         const right = this.halfWidth.slice();
         const road = this.makeRibbon(left, right, 0.04, this.materials.asphalt, 22);
         road.name = 'road';
-        {
+        if (this.spline.circuitId === 'neon') {
             // A baked ambient-occlusion term under concrete decks prevents the sky
             // fill from illuminating the enclosed road as if it were in open air.
             const colors: number[] = [];
@@ -241,7 +252,7 @@ export class TrackBuilder {
             road.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
             this.materials.asphalt.vertexColors = true;
         }
-        {
+        if (this.spline.circuitId === 'neon') {
             const dry = this.materials.asphalt.clone();
             dry.name = 'neon-dry-tunnel-asphalt';
             dry.roughness = 1;
@@ -727,7 +738,7 @@ export class TrackBuilder {
         // Only the two road-facing sign faces receive the canvas artwork. BoxGeometry
         // orders materials as ±X, ±Y, +Z, −Z, keeping the narrow edge faces solid
         // dark metal instead of stretching the lettering around the gantry.
-        const bannerFace = createNeonRaceBoard('START / FINISH', 'NEON DISTRICT / RACE CONTROL', '#80e9ff');
+        const bannerFace = createNeonRaceBoard('START / FINISH', `${this.spline.circuit.shortName.toUpperCase()} / RACE CONTROL`, '#80e9ff');
         const banner = new THREE.Mesh(new THREE.BoxGeometry(beamLength * 0.92, 1.6, .28), [gantryMaterial, gantryMaterial, gantryMaterial, gantryMaterial, bannerFace, bannerFace]);
         banner.name = 'start-finish-banner-face-only';
         banner.position.copy(midBase).addScaledVector(up, 5.2);

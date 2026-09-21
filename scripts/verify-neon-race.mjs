@@ -2,18 +2,19 @@ import {chromium} from '@playwright/test';
 import {writeFile,mkdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const base=process.env.BASE_URL||'http://127.0.0.1:5198';
-const out='artifacts/neon';await mkdir(out,{recursive:true});
+const circuitId=process.env.CIRCUIT||'neon';
+const out=`artifacts/${circuitId}`;await mkdir(out,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true});const results=[];
 try{
- for(const circuit of ['neon'])for(const level of ['normal']){
+ for(const circuit of [circuitId])for(const level of ['normal']){
   const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
-  await page.goto(`${base}/`);await page.waitForFunction(()=>window.__game&&document.querySelector('#loading').hidden,null,{timeout:45000});
-  await page.locator(`[data-assist="${level}"]`).click();await page.locator('#session-primary').click();await page.waitForFunction(()=>window.__THREE_GAME_DIAGNOSTICS__.started);
+  await page.goto(`${base}/?circuit=${circuit}`);await page.waitForFunction(()=>window.__game&&document.querySelector('#loading').hidden,null,{timeout:45000});
+  await page.locator(`[data-difficulty="${level}"]`).click();await page.locator('#session-primary').click();await page.waitForFunction(()=>window.__THREE_GAME_DIAGNOSTICS__.started);
   await page.keyboard.down('w');await page.waitForTimeout(2500);await page.keyboard.up('w');
   const launch=await page.evaluate(()=>window.__THREE_GAME_DIAGNOSTICS__);await page.screenshot({path:`${out}/${circuit}-${level}-launch.png`});
   await page.evaluate(async()=>{
    const {AiDriver}=await import('/src/systems/AiDriver.ts');const {Timing}=await import('/src/systems/Timing.ts');
-   const g=window.__game;g.loop.stop();g.beginSession();g.car.physics.setAssistLevel('normal');g.started=true;g.countdown=0;g.paused=false;g.timing.start(g.playerPrev);
+   const g=window.__game;g.loop.stop();g.beginSession();g.started=true;g.countdown=0;g.paused=false;g.timing.start(g.playerPrev);
    const driver=new AiDriver(g.spline,0,15.6,94);driver.setPace(1.08);driver.reset(g.builder.gridSlot(5).index);
    const cars=[g.car,...g.rivals.map(r=>r.car)];
    const records=cars.map(c=>{const cache={index:g.spline.nearestSample(c.physics.position,{index:0}).index};const prev=g.spline.progressAt(c.physics.position,cache);const timing=new Timing(g.spline);timing.start(prev);return{prev,cache,timing,distance:0,maxOffset:0,offroadSeconds:0,barriers:0,stoppedSeconds:0}});

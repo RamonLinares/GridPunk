@@ -127,7 +127,7 @@ export class GroundSurface {
       for (const triangle of this.cells.get(`${cellX},${cellZ}`) ?? []) {
         if (triangle.maxX < minX || triangle.minX > maxX || triangle.maxZ < minZ || triangle.minZ > maxZ) continue;
         // A triangle wholly above the route-height ceiling cannot participate
-        // in the selected Suzuka deck. Partially eligible triangles remain in
+        // in the selected Kairo deck. Partially eligible triangles remain in
         // the comparison, preferring a safe false fallback at a layer change.
         if (referenceY !== undefined && Math.min(triangle.ay, triangle.ay + triangle.by, triangle.ay + triangle.cy) > referenceY + 2.5) continue;
         const triangleConstant = triangle.normal.x * triangle.ax + triangle.normal.y * triangle.ay + triangle.normal.z * triangle.az;

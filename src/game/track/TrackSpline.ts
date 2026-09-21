@@ -20,7 +20,7 @@ export interface SurfaceProbe {
 }
 const SAMPLE_SPACING = 4;
 /**
- * Resamples the authored Neon centerline into a smooth, evenly spaced closed loop and
+ * Resamples the authored circuit centerline into a smooth, evenly spaced closed loop and
  * exposes geometric queries used for road construction, physics and timing.
  */
 export class TrackSpline {
@@ -102,7 +102,7 @@ export class TrackSpline {
             const dx = point.x - s.position.x;
             const dz = point.z - s.position.z;
             const horizontal = dx * dx + dz * dz;
-            const d = horizontal + (0);
+            const d = horizontal + (this.circuit.gradeSeparated ? (point.y - s.position.y) ** 2 : 0);
             if (d < bestDist) {
                 bestDist = d;
                 bestHorizontal = horizontal;
@@ -145,7 +145,8 @@ export class TrackSpline {
             const dx = b.x - a.x, dz = b.z - a.z;
             const t = THREE.MathUtils.clamp(((point.x - a.x) * dx + (point.z - a.z) * dz) / Math.max(1e-8, dx * dx + dz * dz), 0, 1);
             const horizontal = (point.x - a.x - dx * t) ** 2 + (point.z - a.z - dz * t) ** 2;
-            const d = horizontal + (0);
+            const height = a.y + (b.y - a.y) * t;
+            const d = horizontal + (this.circuit.gradeSeparated ? (point.y - height) ** 2 : 0);
             if (d < bestDist) {
                 bestDist = d;
                 bestIndex = idx;
