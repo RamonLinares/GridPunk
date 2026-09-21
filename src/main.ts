@@ -213,7 +213,7 @@ const driverSetting = document.querySelector('#driver-assists')!;
 const rivalDescriptions: Record<OpponentDifficulty, string> = {
     easy: 'Measured rivals leave a larger braking and traffic margin.',
     normal: 'Competitive rivals balance commitment with safe traffic gaps.',
-    hard: 'Fastest rivals brake later and carry more speed through clear corners.',
+    hard: 'Sharp launches, late braking and fast corner exits. Expect a fight for position.',
 };
 const rivalSetting = document.createElement('div');
 rivalSetting.className = 'rival-setting assist-setting';

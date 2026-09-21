@@ -3,13 +3,15 @@ import {writeFile,mkdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const base=process.env.BASE_URL||'http://127.0.0.1:5198';
 const circuitId=process.env.CIRCUIT||'neon';
+const levels=(process.env.DIFFICULTIES||'normal').split(',');
+assert.ok(levels.every(level=>['easy','normal','hard'].includes(level)),'Use easy, normal or hard difficulties');
 const out=`artifacts/${circuitId}`;await mkdir(out,{recursive:true});
 const browser=await chromium.launch({channel:'chrome',headless:true});const results=[];
 try{
- for(const circuit of [circuitId])for(const level of ['normal']){
+ for(const circuit of [circuitId])for(const level of levels){
   const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
   await page.goto(`${base}/?circuit=${circuit}`);await page.waitForFunction(()=>window.__game&&document.querySelector('#loading').hidden,null,{timeout:45000});
-  await page.locator(`[data-difficulty="${level}"]`).click();await page.locator('#session-primary').click();await page.waitForFunction(()=>window.__THREE_GAME_DIAGNOSTICS__.started);
+  await page.locator('[data-quality="performance"]').click();await page.locator(`[data-difficulty="${level}"]`).click();await page.locator('#session-primary').click();await page.waitForFunction(()=>window.__THREE_GAME_DIAGNOSTICS__.started);
   await page.keyboard.down('w');await page.waitForTimeout(2500);await page.keyboard.up('w');
   const launch=await page.evaluate(()=>window.__THREE_GAME_DIAGNOSTICS__);await page.screenshot({path:`${out}/${circuit}-${level}-launch.png`});
   await page.evaluate(async()=>{
@@ -41,5 +43,17 @@ try{
   await page.close();
  }
  await writeFile(`${out}/browser-races.json`,JSON.stringify(results,null,2));
- for (const result of results) { assert.deepEqual(result.errors,[]);assert.ok(result.state.finished,'All six cars complete two laps');assert.ok(result.state.records.every(r=>r.stoppedSeconds<5),'No car stuck');assert.ok(result.state.records.every(r=>r.barriers<5),'No repeated wall strikes'); }
+ const meanFlyingLap=result=>result.state.records.slice(1).reduce((sum,r)=>sum+r.laps[1].time,0)/5;
+ for (const result of results) {
+  assert.deepEqual(result.errors,[]);assert.ok(result.state.finished,'All six cars complete two laps');assert.ok(result.state.records.every(r=>r.stoppedSeconds<5),'No car stuck');assert.ok(result.state.records.every(r=>r.barriers<5),'No repeated wall strikes');
+  if(result.level==='hard'){
+   assert.ok(result.state.records.slice(1).every(r=>r.laps.every(lap=>lap.valid)&&r.offroadSeconds===0),'Expert pace must come from clean laps');
+   assert.ok(meanFlyingLap(result)<(circuitId==='kairo'?109:67),'Expert field meets its measured lap-pace budget');
+   if(circuitId==='kairo')assert.ok(result.state.records.slice(1).every(r=>r.laps[1].time<112),'Every Expert rival beats the reported 1:54 player lap with a margin');
+  }
+ }
+ for(const [slower,faster] of [['easy','normal'],['normal','hard']]){
+  const a=results.find(r=>r.level===slower),b=results.find(r=>r.level===faster);
+  if(a&&b)assert.ok(meanFlyingLap(b)<meanFlyingLap(a)-2,'Difficulty steps produce meaningfully faster laps');
+ }
 }catch(error){console.error(error);throw error}finally{for(const context of browser.contexts())for(const page of context.pages())await page.close();await browser.close()}

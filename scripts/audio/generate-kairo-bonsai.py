@@ -1,4 +1,5 @@
-"""Generate the owner-requested bonsai music with ElevenLabs Sound Generation (one paid call)."""
+"""Historical generator for the replaced bonsai ambience (one paid call).
+The game now uses the owner-supplied song through prepare-kairo-media.sh."""
 import json, os, pathlib, urllib.request, urllib.error
 out = pathlib.Path('artifacts/kairo-shamisen')
 out.mkdir(parents=True, exist_ok=True)

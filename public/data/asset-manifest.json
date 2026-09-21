@@ -57,9 +57,9 @@
     },
     {
       "file": "public/circuits/kairo-bonsai-music.mp3",
-      "bytes": 352941,
-      "sha256": "603f27b5db30f1207d46d23b011205ad51c6aab0c5f67eabfab2f9c76b8bda39",
-      "source": "ElevenLabs Sound Effects; owner-requested relaxing shamisen loop"
+      "bytes": 160941,
+      "sha256": "d6d9e11a5a20ff89ea1680c5e95cbdd20caf7a990bc208a00bf1c1422d4b6c10",
+      "source": "Owner-provided Shamisen Solo MP3; first 10 seconds, normalized with loop-edge fades"
     },
     {
       "file": "public/circuits/kairo-bonsai-poster.webp",

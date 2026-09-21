@@ -4,9 +4,9 @@ import type { TrackSpline } from '../game/track/TrackSpline';
 import { DEFAULT_CONFIG, type VehicleInput } from './VehiclePhysics';
 export type OpponentDifficulty = 'easy' | 'normal' | 'hard';
 // Rival pace is independent from the fixed Rookie driving aids.
-// The spread chiefly changes corner commitment and traffic gaps; every tier
-// keeps the same believable 1.4 s launch ramp and near-identical top speed.
-export const AI_DIFFICULTY_PACE: Record<OpponentDifficulty, number> = { easy: .84, normal: .96, hard: 1.08 };
+// Pace changes corner commitment, braking and launch response. All tiers use
+// the shared vehicle physics and engine performance without catch-up boosts.
+export const AI_DIFFICULTY_PACE: Record<OpponentDifficulty, number> = { easy: .94, normal: 1.08, hard: 1.65 };
 /**
  * Lightweight racing-line follower. It aims at a speed-dependent look-ahead
  * point, brakes for the tightest curvature in the next stretch and keeps a
@@ -61,7 +61,7 @@ export class AiDriver {
         this.passHold = 0;
     }
     setPace(pace: number): void {
-        this.pace = THREE.MathUtils.clamp(pace, 0.78, 1.1);
+        this.pace = THREE.MathUtils.clamp(pace, 0.78, 1.7);
     }
     update(car: Car, others: {
         position: THREE.Vector3;
@@ -76,7 +76,7 @@ export class AiDriver {
         const spacing = this.spline.length / count;
         const lane = probe.signedOffset;
         const progress = probe.sample.distance + probe.segmentT * spacing;
-        const lookahead = 8 + speed * .42;
+        const lookahead = 8 + speed * THREE.MathUtils.lerp(.42, .34, THREE.MathUtils.smoothstep(speed, 30, 60));
         const aheadIndex = base + Math.max(2, Math.round(lookahead / spacing));
         const ahead = this.spline.sampleAt(aheadIndex);
         const horizonMetres = Math.max(40, speed * 2.2);
@@ -171,20 +171,24 @@ export class AiDriver {
         // the entire straight to be driven at its apex speed.
         // Difficulty chiefly changes corner commitment; all modes retain full
         // engine performance on straights instead of the old 68% Rookie speed cap.
-        const difficulty = THREE.MathUtils.clamp((this.pace - .84) / .24, 0, 1);
+        const difficulty = THREE.MathUtils.clamp((this.pace - .94) / .30, 0, 1);
         let cornerSpeed = this.topSpeed * (0.92 + this.pace * 0.08);
         // A compromised line in traffic has less cornering room than a solo lap.
         const lineMargin = 1 - (traffic.length ? .24 : .16) * THREE.MathUtils.clamp((Math.max(Math.abs(aimLane), Math.abs(lane)) - 1) / 3, 0, 1);
-        const brakingDeceleration = 22 + difficulty * 3;
+        const trafficMargin = alongside ? .9 : 1;
+        const brakingDeceleration = 22 + difficulty * 6;
         const horizon = Math.max(90, speed * speed / (2 * brakingDeceleration) + 55);
         const scan = Math.ceil(horizon / spacing);
         for (let k = 0; k <= scan; k += 1) {
             const sampleIndex = (base + k) % count;
             const curvature = Math.max(0.0001, this.cornerCurvature[sampleIndex]);
-            const hairpinPace = this.pace;
+            // Tight chicanes still need time to reverse steering. Spend the
+            // higher difficulty's pace on flowing corners, not hairpin overshoot.
+            const hairpinPace = THREE.MathUtils.lerp(this.pace, Math.min(this.pace, 1.08),
+                THREE.MathUtils.smoothstep(curvature, .035, .075));
             // v²*k <= base grip + downforce grip*v². Keep a conservative share
             // of the shared car's aerodynamic grip for steering/braking headroom.
-            const apexSpeed = Math.sqrt(this.grip / Math.max(.0001, curvature - .0028)) * hairpinPace * lineMargin;
+            const apexSpeed = Math.sqrt(this.grip / Math.max(.0001, curvature - .00325)) * hairpinPace * lineMargin * trafficMargin;
             const availableDistance = Math.max(0, k * spacing - 4);
             cornerSpeed = Math.min(cornerSpeed, Math.sqrt(apexSpeed * apexSpeed + 2 * brakingDeceleration * availableDistance));
         }
@@ -192,6 +196,11 @@ export class AiDriver {
         if (Math.abs(err) > 1.1) {
             cornerSpeed = Math.min(cornerSpeed, 22);
         }
+        // Lift before an outward drift reaches the road edge, including after
+        // a side-by-side pass. This uses real velocity rather than snapping back.
+        const projectedLane = lane + car.physics.velocity.dot(probe.sample.right) * .6;
+        const edgeRisk = Math.max(Math.abs(lane), Math.abs(projectedLane));
+        cornerSpeed *= 1 - .45 * THREE.MathUtils.smoothstep(edgeRisk, 4.8, 7);
         // Match the actual clear distance until the pass is physically alongside.
         // Equal-speed followers still leave a bumper gap instead of rubbing forever.
         for (const other of traffic) {
@@ -212,7 +221,7 @@ export class AiDriver {
             cornerSpeed = Math.min(cornerSpeed, followingSpeed);
         }
         const throttle = THREE.MathUtils.clamp((cornerSpeed - speed) / THREE.MathUtils.lerp(2, 1.65, difficulty), 0, 1)
-            * Math.min(1, this.launchElapsed / 1.4);
+            * Math.min(1, this.launchElapsed / THREE.MathUtils.lerp(1.1, .3, difficulty));
         const brake = THREE.MathUtils.clamp((speed - cornerSpeed) / 6, 0, 1);
         // This controller is tuned in physical wheel angle. Extra low-speed lock
         // for the driver must not multiply the AI's existing steering demands.
