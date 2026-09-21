@@ -10,13 +10,14 @@ import type {NeonBillboards} from './NeonBillboards';
 
 interface Placement {x:number;z:number;r:number;angle:number;variant:number;fraction:number;side:number;adIndex:number}
 /** Three Blender-authored silhouettes, actual bridge connections and local dressing. */
-export function createNeonLandmarks(parent:THREE.Group,builder:TrackBuilder,lights:NeonAtmosphereLight[],billboards:NeonBillboards){
+export function createNeonLandmarks(parent:THREE.Group,builder:TrackBuilder,lights:NeonAtmosphereLight[],billboards:NeonBillboards,reservedSites:readonly {x:number;z:number;r:number}[]=[]){
  const neonTunnelAt = (p: number) => builder.spline.circuitId === 'neon' && districtTunnelAt(p);
  const group=new THREE.Group();group.name='neon-blender-districts';group.userData.sceneryContainer=true;parent.add(group);
  const placements:Placement[]=[],pairs:{fraction:number;left:Placement;right:Placement}[]=[];
  const variants=['exchange','terraces','split-spire'];
  // Entire occupied footprints are checked against every part of the circuit.
  const clear=(x:number,z:number,angle:number)=>{
+  if(reservedSites.some(site=>Math.hypot(x-site.x,z-site.z)<site.r+27))return false;
   // The original cylindrical landmark is authored separately from the filler.
   if(Math.hypot(x+92,z+300)<64)return false;
   const co=Math.cos(angle),si=Math.sin(angle);for(let u=-19;u<=19;u+=2)for(let v=-18;v<=18;v+=2)if(builder.distanceToTrack(x+co*u+si*v,z-si*u+co*v)<14.2)return false;return true;

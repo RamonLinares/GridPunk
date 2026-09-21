@@ -610,7 +610,7 @@ export class Game {
         const lap = this.replayRecorder.last;
         if (!lap)
             throw new Error('No recorded lap');
-        return { lap, holograms: [this.environment.holograms, this.environment.koiHolograms].filter((s): s is NonNullable<typeof s> => !!s),
+        return { lap, holograms: [this.environment.holograms, this.environment.koiHolograms, this.environment.billboardAudio].filter((s): s is NonNullable<typeof s> => !!s),
             rain: true, exposure: (position: THREE.Vector3) => {
                 const progress = this.spline.progressAt(position, { index: 0 });
                 return { tunnel: this.tunnelMixAt(progress), rain: this.rainExposureAt(progress) };
@@ -681,6 +681,7 @@ export class Game {
             this.audio.updateRain(this.rainExposureAt(progress));
             this.audio.updateHolograms(this.environment.holograms, motion.position, motion.velocity, motion.right.x, motion.right.z);
             this.audio.updateHolograms(this.environment.koiHolograms, motion.position, motion.velocity, motion.right.x, motion.right.z, 'koi');
+            this.audio.updateHolograms(this.environment.billboardAudio, motion.position, motion.velocity, motion.right.x, motion.right.z, 'billboard');
         }
     }
     setReplayExporting(exporting: boolean) {
@@ -917,6 +918,7 @@ export class Game {
         this.audio.updateRain(this.rainExposureAt(progress));
         this.audio.updateHolograms(this.environment.holograms, this.car.physics.position, this.car.physics.velocity, this.camera.matrixWorld.elements[0], this.camera.matrixWorld.elements[2]);
         this.audio.updateHolograms(this.environment.koiHolograms, this.car.physics.position, this.car.physics.velocity, this.camera.matrixWorld.elements[0], this.camera.matrixWorld.elements[2], 'koi');
+        this.audio.updateHolograms(this.environment.billboardAudio, this.car.physics.position, this.car.physics.velocity, this.camera.matrixWorld.elements[0], this.camera.matrixWorld.elements[2], 'billboard');
         this.audio.updateRivals(this.rivals.map((rival, id) => ({ rival, id })).filter(({}) => true).map(({ rival, id }) => {
             const dx = rival.car.physics.position.x - this.car.physics.position.x;
             const dz = rival.car.physics.position.z - this.car.physics.position.z;

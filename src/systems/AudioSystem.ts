@@ -39,6 +39,7 @@ export class AudioSystem {
   private rain:RainAudio|null=null;
   private hologram: HologramAudio | null = null;
   private koi: HologramAudio | null = null;
+  private billboard: HologramAudio | null = null;
   private master: GainNode | null = null;
   private spatialBus: GainNode | null = null;
   private roomGain: GainNode | null = null;
@@ -188,9 +189,9 @@ export class AudioSystem {
     }
   }
 
-  updateHolograms(scene:HologramAudioScene|undefined,position:{x:number;y:number;z:number},velocity:{x:number;y:number;z:number},rightX:number,rightZ:number,kind:'geisha'|'koi'='geisha'):void {
+  updateHolograms(scene:HologramAudioScene|undefined,position:{x:number;y:number;z:number},velocity:{x:number;y:number;z:number},rightX:number,rightZ:number,kind:'geisha'|'koi'|'billboard'='geisha'):void {
     if(!scene||!this.ctx||!this.master||this.ctx.state!=='running'||this.paused)return;
-    const key=kind==='koi'?'koi':'hologram';
+    const key=kind==='billboard'?'billboard':kind==='koi'?'koi':'hologram';
     this[key]??=new HologramAudio(this.ctx,this.master,scene);
     this[key].update(position,velocity,rightX,rightZ);
   }
@@ -201,7 +202,7 @@ export class AudioSystem {
   }
 
   getDiagnostics() {
-    return { koi:this.koi?.getDiagnostics()??null, rain:this.rain?.getDiagnostics()??null, hologram:this.hologram?.getDiagnostics()??null, state: this.ctx?.state ?? 'locked', muted: this.muted, paused: this.paused,
+    return { billboard:this.billboard?.getDiagnostics()??null, koi:this.koi?.getDiagnostics()??null, rain:this.rain?.getDiagnostics()??null, hologram:this.hologram?.getDiagnostics()??null, state: this.ctx?.state ?? 'locked', muted: this.muted, paused: this.paused,
       engineSample: this.sampleStatus, loopSources: this.loopSources.size,
       transientSources: this.transientSources.size, tunnelWetGain:this.roomGain?.gain.value??0, tunnelSend:this.engineRoomInput?.gain.value??0, tunnelImpulseSeconds:1.35, roomMix: Number(this.roomMix.toFixed(3)) };
   }
@@ -609,6 +610,7 @@ export class AudioSystem {
     this.paused = paused;
     this.hologram?.setPaused(paused);
     this.koi?.setPaused(paused);
+    this.billboard?.setPaused(paused);
     if (!paused) void this.ctx?.resume().catch(() => undefined);
     this.applyMasterLevel();
   }
@@ -632,6 +634,7 @@ export class AudioSystem {
     this.removeUnlockListeners();
     this.hologram?.dispose();
     this.koi?.dispose();
+    this.billboard?.dispose();
     this.rain?.dispose();
     for (const source of [...this.loopSources, ...this.transientSources]) {
       try { source.stop(); } catch { /* The source may already have ended. */ }

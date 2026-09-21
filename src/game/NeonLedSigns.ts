@@ -27,7 +27,7 @@ export function createNeonRaceBoard(title:string,subtitle:string,color:string,co
  return createNeonLedMaterial(source,{columns,rows:32,intensity:4.8,motion:title==='START / FINISH'?'race-control':'ticker',name:`neon-led-${title.toLowerCase().replaceAll(' ','-')}${compact?'-compact':''}`});
 }
 
-interface LedOptions {columns:number;rows:number;intensity?:number;flipY?:boolean;name?:string;motion?:'ticker'|'race-control'|'vertical'|'horizontal'}
+interface LedOptions {columns:number;rows:number;intensity?:number;flipY?:boolean;name?:string;motion?:'ticker'|'race-control'|'vertical'|'horizontal'|'static'}
 /** Static diode housing plus a GPU-driven signal: no per-frame canvas redraws
  * or texture uploads. Integer-cell motion keeps the physical matrix stationary. */
 export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,intensity=4.2,flipY=true,name='neon-led-sign',motion=rows>columns?'vertical':'horizontal'}:LedOptions):THREE.MeshStandardMaterial{
@@ -58,7 +58,7 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
  const material=new THREE.MeshStandardMaterial({map:tex(face),emissiveMap:tex(emission),emissive:0xffffff,emissiveIntensity:intensity,roughness:.62,metalness:.3});
  const hash=Array.from(name).reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261);
  const phase=((Math.imul(hash^(hash>>>16),2246822507)>>>0)%997)/997*9;
- const kind=motion==='race-control'?0:motion==='ticker'?1:motion==='vertical'?2:3;
+ const kind=motion==='race-control'?0:motion==='ticker'?1:motion==='vertical'?2:motion==='static'?4:3;
  material.onBeforeCompile=shader=>{
   shader.uniforms.uLedTime=ledTime;
   shader.uniforms.uLedCinematic=ledCinematic;
@@ -86,7 +86,7 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
      if(boardUv.x<0.15||boardUv.x>0.85){
       gain=0.68+0.32*smoothstep(-0.5,0.7,sin(floor(boardUv.x*uLedGrid.x/6.0)*1.8-tick*5.0));
      }
-    }else{
+    }else if(uLedKind<3.5){
      // Staggered hold-and-roll pages on architectural signs.
      float travel=clamp((mod(tick,11.0)-7.0)/4.0,0.0,1.0);
      if(uLedKind<2.5)signalUv.y=fract(signalUv.y+floor(travel*uLedGrid.y)/uLedGrid.y);
@@ -121,5 +121,5 @@ export function createNeonLedMaterial(source:HTMLCanvasElement,{columns,rows,int
   `);
  };
  material.customProgramCacheKey=()=>'neon-led-motion-v2';
- material.name=name;material.userData.ledMatrix={columns,rows,static:false,motion,phase};return material;
+ material.name=name;material.userData.ledMatrix={columns,rows,static:motion==='static',motion,phase};return material;
 }

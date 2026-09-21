@@ -56,6 +56,60 @@
       "source": "ElevenLabs Sound Effects; commercial rights confirmed by owner"
     },
     {
+      "file": "public/circuits/kairo-bonsai-music.mp3",
+      "bytes": 384813,
+      "sha256": "9813ea8c27d1a0997d2b923b92025bda66d2b7bb7263155045ed82a19b5a54e8",
+      "source": "ElevenLabs generated instrumental ambience; owner-requested bonsai loop"
+    },
+    {
+      "file": "public/circuits/kairo-bonsai-poster.webp",
+      "bytes": 22294,
+      "sha256": "37a2e31b4761d02ece31dd764bed27558480dc722716de5b7d07873e0e1c89df",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-bonsai.mp4",
+      "bytes": 2134963,
+      "sha256": "9cf6554323b33108d6cdbe4868aef4cd7de9939d6801e4b40cb7499ed91a99b5",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-mars-megaphone.mp3",
+      "bytes": 161325,
+      "sha256": "ef08b3cf41c1ad551d041fa94c07988a5ce34612b2174b52443eff35e96e38df",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-mars-poster.webp",
+      "bytes": 58658,
+      "sha256": "09ee5fb175a96b87eb650d3f2e7c8401452b5e36bcfce647e8c2151ee056222c",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-mars.mp4",
+      "bytes": 2604521,
+      "sha256": "6289e925364c829c2b8e0a3104b5a7040b63fe40a2a9c1c568edb9b51a6d550a",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-ramen-audio.mp3",
+      "bytes": 160941,
+      "sha256": "fa327916bdab8b65ed560e548adade5c238d702ceace25d7471e62cdc1bd7e74",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-ramen-poster.webp",
+      "bytes": 18952,
+      "sha256": "8f64b5d4ee35351c095b3d62fdc8f321ad5b4f165109983684612fa313cda1c4",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
+      "file": "public/circuits/kairo-ramen.mp4",
+      "bytes": 1290297,
+      "sha256": "170be61ef1a92bed311dc9b01dd63706819f15def12367f6131f871246ced927",
+      "source": "Owner-provided Kairo video; optimized footage, poster or processed soundtrack"
+    },
+    {
       "file": "public/circuits/neon-billboard-atlas-v2.webp",
       "bytes": 1049992,
       "sha256": "e7f75b33d0043b364e0ca29eeb05f453aa6b53bfcf2baf233b073543095f759b",

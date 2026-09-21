@@ -1,4 +1,6 @@
 import { neonBankAt as districtBankAt, neonTunnelAt as districtTunnelAt, NEON_TUNNEL } from './track/NeonProfile';
+import { createKairoVideoBillboard } from './KairoVideoBillboard';
+import { createKairoFerrisWheel } from './KairoFerrisWheel';
 import { createNeonTunnel } from './NeonTunnel';
 import { createNeonAirTraffic } from './NeonAirTraffic';
 import {createNeonLedMaterial,updateNeonLedSigns,setNeonLedCinematic} from './NeonLedSigns';
@@ -26,7 +28,10 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   const atmosphereLights: NeonAtmosphereLight[] = [];
   scene.userData.neonAtmosphereLights = atmosphereLights;
   const billboards=createNeonBillboards();
-  const landmarks=createNeonLandmarks(group,builder,atmosphereLights,billboards);
+  const videoBillboard=builder.spline.circuitId==='kairo'?createKairoVideoBillboard(group,atmosphereLights,builder):undefined;
+  const wheel=builder.spline.circuitId === 'kairo' ? createKairoFerrisWheel(builder) : undefined;
+  if(wheel)group.add(wheel.group);
+  const landmarks=createNeonLandmarks(group,builder,atmosphereLights,billboards,[...(wheel?.landmarkReservations??[]),...(videoBillboard?[videoBillboard.reservation]:[])]);
   group.userData.billboards=billboards.placements;
   const shops=createNeonShopfronts(group,builder);
   const architecture=createNeonArchitecture(group);
@@ -74,9 +79,10 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
     const list=displayBatches.get(material)??[];list.push(dummy.matrix.clone());displayBatches.set(material,list);
   };
   const tunnelFootprint=builder.spline.samples.filter(s=>neonTunnelAt(s.index/builder.spline.count));
-  const occupied: {x:number;z:number;r:number}[]=[...landmarks.reservations];
+  const occupied: {x:number;z:number;r:number}[]=[...landmarks.reservations,...(wheel?[wheel.reservation]:[]),...(videoBillboard?[videoBillboard.reservation]:[])];
   const addBuilding=(x:number,z:number,w:number,d:number,h:number,angle:number,near:boolean)=>{
     const radius=Math.hypot(w,d)/2;
+    h=Math.min(h,wheel?.buildingHeightLimit(x,z)??Infinity,videoBillboard?.buildingHeightLimit(x,z)??Infinity);
     if(tunnelFootprint.some(s=>Math.hypot(x-s.position.x,z-s.position.z)<radius+23))return;
     if(occupied.some(p=>Math.hypot(x-p.x,z-p.z)<radius+p.r+1))return;
     const co=Math.cos(angle),si=Math.sin(angle);
@@ -337,13 +343,15 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   let cinematic=false;
   const airTraffic=createNeonAirTraffic(group,builder);
   const hologram=createNeonHologram(group,atmosphereLights,builder);
-  return {group,ready:Promise.all([landmarks.ready,tunnel?.ready]).then(()=>{}),holograms:hologram.audioScene,koiHolograms:hologram.koiAudioScene,disposeExtraResources:()=>{wetRoad.getRenderTarget().dispose();hologram.dispose();landmarks.dispose();tunnel?.dispose();billboards.dispose();},sun:sunLighting.sun,sunLighting,sky,
+  return {group,ready:Promise.all([landmarks.ready,tunnel?.ready]).then(()=>{}),holograms:hologram.audioScene,koiHolograms:hologram.koiAudioScene,billboardAudio:videoBillboard?.audioScene,disposeExtraResources:()=>{wetRoad.getRenderTarget().dispose();hologram.dispose();videoBillboard?.dispose();landmarks.dispose();tunnel?.dispose();billboards.dispose();},sun:sunLighting.sun,sunLighting,sky,
     update(focus,seconds=0){
       updateNeonLedSigns(seconds);
+      wheel?.update(seconds);
       const progress=focus?builder.spline.nearestSample(focus,tunnelCache).index/builder.spline.count:0;
       const inTunnel=neonTunnelAt(progress);
 
       hologram.update(focus);
+      videoBillboard?.update(focus);
       landmarks.update(focus,seconds);
       tunnel?.update(focus,seconds);
       shops.update(focus,seconds);

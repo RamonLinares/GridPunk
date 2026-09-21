@@ -1,5 +1,5 @@
 interface Point { x:number;y:number;z:number }
-export interface HologramAudioScene { positions:readonly Point[];video:HTMLVideoElement; audioUrl?:string; gain?:number; syncVideo?:boolean }
+export interface HologramAudioScene { positions:readonly Point[];video:HTMLVideoElement; audioUrl?:string; gain?:number; syncVideo?:boolean; range?:number; referenceDistance?:number; departureDistance?:number }
 
 /** A local hologram soundtrack; one decoder and one nearby speaker per track. */
 export class HologramAudio {
@@ -53,7 +53,7 @@ export class HologramAudio {
     this.scene.positions.forEach((p,i)=>{const d=Math.hypot(p.x-position.x,p.y-position.y,p.z-position.z);if(d<distance){distance=d;index=i}});
     this.distance=distance;
     const now=this.ctx.currentTime;
-    if(index<0||distance>170){
+    if(index<0||distance>(this.scene.range??170)){
       this.level.gain.setTargetAtTime(0,now,.12);
       // Outside the audible area release the source; preserve phase on re-entry.
       if(this.source){this.source.stop();this.source.disconnect();this.source=null;}
@@ -85,16 +85,17 @@ export class HologramAudio {
 }
 
 /** Shared by live playback and offline MP4 mixing. */
-export function hologramMix(scene:Pick<HologramAudioScene,'positions'|'gain'>,position:Point,velocity:Point,rightX:number,rightZ:number,headingX:number,headingZ:number){
+export function hologramMix(scene:Pick<HologramAudioScene,'positions'|'gain'|'range'|'referenceDistance'|'departureDistance'>,position:Point,velocity:Point,rightX:number,rightZ:number,headingX:number,headingZ:number){
   let nearest:Point|undefined,distance=Infinity;
   for(const p of scene.positions){const d=Math.hypot(p.x-position.x,p.y-position.y,p.z-position.z);if(d<distance){distance=d;nearest=p;}}
-  if(!nearest||distance>170)return{rate:1,departure:0,pan:0,level:0,cutoff:1800};
+  const range=scene.range??170,reference=scene.referenceDistance??48,departureDistance=scene.departureDistance??32;
+  if(!nearest||distance>range)return{rate:1,departure:0,pan:0,level:0,cutoff:1800};
   const dx=nearest.x-position.x,dy=nearest.y-position.y,dz=nearest.z-position.z;
   const closing=(velocity.x*dx+velocity.y*dy+velocity.z*dz)/Math.max(distance,1);
-  const behind=Math.max(0,-dx*headingX-dz*headingZ),fade=Math.max(0,Math.min(1,(170-distance)/70));
-  return{rate:Math.max(.82,Math.min(1.18,1+closing/343)),departure:Math.exp(-((behind/32)**2)),
+  const behind=Math.max(0,-dx*headingX-dz*headingZ),fade=Math.max(0,Math.min(1,(range-distance)/(range*70/170)));
+  return{rate:Math.max(.82,Math.min(1.18,1+closing/343)),departure:Math.exp(-((behind/departureDistance)**2)),
     pan:Math.max(-.95,Math.min(.95,(dx*rightX+dz*rightZ)/Math.max(15,Math.hypot(dx,dz)))),
-    level:(scene.gain??(.95*2/3))*fade*fade/(1+(distance/48)**2),cutoff:1800+4300*Math.max(0,1-distance/170)};
+    level:(scene.gain??(.95*2/3))*fade*fade/(1+(distance/reference)**2),cutoff:1800+4300*Math.max(0,1-distance/range)};
 }
 export function hologramImpulse(ctx:BaseAudioContext):AudioBuffer{
     const length=Math.floor(ctx.sampleRate*2.2),b=ctx.createBuffer(2,length,ctx.sampleRate);

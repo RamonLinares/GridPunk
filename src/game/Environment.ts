@@ -7,6 +7,7 @@ import type { SunLighting } from '../systems/SunLighting';
 export interface EnvironmentHandles {
   ready?: Promise<void>;
   koiHolograms?: import('../systems/HologramAudio').HologramAudioScene;
+  billboardAudio?: import('../systems/HologramAudio').HologramAudioScene;
   holograms?: import('../systems/HologramAudio').HologramAudioScene;
   group: THREE.Group;
   disposeExtraResources?(): void;
