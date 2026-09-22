@@ -9,6 +9,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { NeonFrameDepthPass } from './NeonFrameDepthPass';
 import { NeonAtmospherePass } from './NeonAtmospherePass';
 import {NeonVelocityPass,NeonTemporalPass,NeonRoadReflectionPass,createNeonTapePass,createNeonAnamorphicPass} from './NeonExtremePasses';
+import { SceneDepthCapturePass, SunShaftPass, AerialPerspectivePass } from './SteamCinematicPasses';
 import type { Telemetry } from './VehiclePhysics';
 
 /** Fraction of the composer resolution the ambient-occlusion buffers use. */
@@ -56,6 +57,7 @@ const gradeShader = {
     uMotion: {value: 0},
     uExtreme: {value: 0}, tVelocity: {value: null}, uJitterDelta: {value: new THREE.Vector2()},
     uLook: {value: 0}, uDof: {value: 0}, uFocus: {value: 30}, uBokeh: {value: 12}, uDaylight: {value: 0},
+    uSteam: {value: 0}, uSolar: {value: 0}, uLetterbox: {value: 0},
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -77,7 +79,7 @@ const gradeShader = {
     uniform mat4 uInverseViewProjection,uPreviousViewProjection;
     uniform vec3 uEye;
     uniform float uMotion,uExtreme;uniform sampler2D tVelocity;uniform vec2 uJitterDelta;
-    uniform float uLook,uDof,uFocus,uBokeh,uDaylight;
+    uniform float uLook,uDof,uFocus,uBokeh,uDaylight,uSteam,uSolar,uLetterbox;
     #include <packing>
     varying vec2 vUv;
 
@@ -168,6 +170,31 @@ const gradeShader = {
         float y=max(dot(color,vec3(.2126,.7152,.0722)),.0001);
         color*=clamp(pow(y/.18,c-1.),.05,1.35);
         color+=(grain-.5)*.002;
+      }else if(uSolar>.5){
+      // Solarpunk film print: neutral daylight balance, foliage pulled from
+      // saturated lime towards olive, sky blues calmed, a soft toe with a
+      // touch of cool in the blacks, gentle contrast and fine grain.
+      color = max(color, vec3(0.0));
+      float l0 = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      float green = clamp((color.g - max(color.r, color.b)) / max(color.g, 1e-4), 0.0, 1.0);
+      color = mix(color, vec3(l0) + (color - vec3(l0)) * .84 + vec3(.01, 0.0, -.008) * l0 * 3.0, green);
+      float blue = clamp((color.b - max(color.r, color.g)) / max(color.b, 1e-4), 0.0, 1.0);
+      color = mix(color, mix(vec3(l0), color, .9), blue);
+      color = max(saturate(color, 1.08), vec3(0.0));
+      color *= mix(vec3(.97, .99, 1.03), vec3(1.05, 1.0, .93), smoothstep(.02, .6, l0));
+      color = .18 * pow(color / .18 + 1e-5, vec3(1.16));
+      color += vec3(.003, .0045, .006) * (1.0 - smoothstep(0.0, .08, l0));
+      color += (grain - 0.5) * .005 * (1.0 - .5 * smoothstep(0.0, .8, l0));
+      }else if(uSteam>.5){
+      // Steampunk golden-hour print: teal shadows against amber highlights,
+      // a firmer curve about mid grey, sepia-lifted blacks and film grain.
+      color = max(color, vec3(0.0));
+      float l0 = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      color *= mix(vec3(.84, .97, 1.13), vec3(1.13, .98, .78), smoothstep(.015, .5, l0));
+      color = .18 * pow(color / .18 + 1e-5, vec3(1.14));
+      color = max(saturate(color, 1.1), vec3(0.0));
+      color += vec3(.009, .0055, .002);
+      color += (grain - 0.5) * .007 * (1.0 - .6 * smoothstep(0.0, .8, l0));
       }else if(uDaylight>.5){
       // Daylight grade: a little more colour and contrast about mid grey,
       // warm highlights; no cool shadow cast.
@@ -202,6 +229,13 @@ const gradeShader = {
       float vignette = 1.0 - smoothstep(0.25, 0.9, length(centered * vec2(1.05, 1.0)));
       color *= mix(1.0, vignette, uVignette);
       if(uLook>.5) color *= 1.0 - smoothstep(.47,.97,length(centered))*.9;
+      if(uSteam>.5) color *= 1.0 - smoothstep(.32,.95,length(centered * vec2(1.1, 1.0)))*.6;
+      if(uSolar>.5) color *= 1.0 - smoothstep(.4,1.05,length(centered * vec2(1.1, 1.0)))*.42;
+      if(uLetterbox>.5){
+        // 2.39:1 bars for replays and exports; portrait frames are left open.
+        float bar = max(0.0, (1.0 - uResolution.x / uResolution.y / 2.39) * .5);
+        if(vUv.y < bar || vUv.y > 1.0 - bar) color = vec3(0.0);
+      }
 
       // Damage/impact red tint.
       color = mix(color, color * vec3(1.4, 0.5, 0.5), uDamage);
@@ -234,6 +268,14 @@ export class PostProcessing {
   private aoWanted = false;
   private look = false;
   private anamorphic?: ShaderPass;
+  private readonly steam: boolean;
+  private readonly solar: boolean;
+  private steamLook = false;
+  private solarLook = false;
+  private depthCapture?: SceneDepthCapturePass;
+  private sunShafts?: SunShaftPass;
+  private steamFlare?: ShaderPass;
+  private aerial?: AerialPerspectivePass;
   private enabled = true;
   private time = 0;
   private speed = 0;
@@ -266,6 +308,8 @@ export class PostProcessing {
   ) {
     this.neon = scene.userData.neon === true;
     this.daylight = scene.userData.daylight === true;
+    this.steam = scene.userData.steam === true;
+    this.solar = scene.userData.solar === true;
     this.rendererRef = renderer;
     this.mainCamera = camera;
     this.composer = new EffectComposer(renderer);
@@ -343,6 +387,7 @@ export class PostProcessing {
     this.renderPass.camera = camera;
     this.resetMotionHistory();
     this.applyExtremePasses();
+    this.applySteamPasses();
     if (this.atmosphere) this.atmosphere.enabled = camera === this.mainCamera;
     this.applyAmbientOcclusion();
   }
@@ -350,6 +395,7 @@ export class PostProcessing {
   setQuality(high: boolean, extreme=false, cinematic=false): void {
     this.setExtreme((extreme || cinematic) && this.neon);
     this.setLook(cinematic && this.neon);
+    this.setDayLook(cinematic && this.steam ? 'steam' : cinematic && this.solar ? 'solar' : null);
     this.bloom.enabled = high || this.neon;
     // `?noao` isolates ambient occlusion for inspection and profiling.
     this.aoWanted = high && !(typeof location !== 'undefined' && location.search.includes('noao'));
@@ -412,8 +458,50 @@ export class PostProcessing {
     this.applyExtremePasses();this.setSize(this.width,this.height,this.dpr);
   }
 
+  /**
+   * Daylight cinematic looks. Steampunk: sun shafts from the open sky, a golden
+   * anamorphic streak on the sun and gas lamps, a wider warm bloom and the
+   * film grade. Solarpunk: aerial perspective, softer white shafts, a restrained
+   * wide bloom, slight lens fringing and a film-print grade.
+   */
+  private setDayLook(mode:'steam'|'solar'|null):void {
+    if((this.steamLook?'steam':this.solarLook?'solar':null)===mode)return;
+    for(const pass of [this.depthCapture,this.sunShafts,this.steamFlare,this.aerial])if(pass){this.composer.removePass(pass);pass.dispose();}
+    this.depthCapture=undefined;this.sunShafts=undefined;this.steamFlare=undefined;this.aerial=undefined;
+    this.steamLook=mode==='steam';this.solarLook=mode==='solar';
+    if(mode){
+      this.depthCapture=new SceneDepthCapturePass(this.mainCamera,mode==='steam'?.5:1);
+      this.composer.insertPass(this.depthCapture,this.composer.passes.indexOf(this.renderPass)+1);
+      if(mode==='solar'){
+        this.aerial=new AerialPerspectivePass(this.depthCapture,this.mainCamera);
+        this.composer.insertPass(this.aerial,this.composer.passes.indexOf(this.bloom));
+      }
+      this.sunShafts=new SunShaftPass(this.depthCapture,this.mainCamera);
+      if(mode==='solar'){const u=this.sunShafts.uniforms;u.uTint.value.setRGB(1,.94,.84);u.uGain.value=.016;u.uThreshold.value=1.1;}
+      this.composer.insertPass(this.sunShafts,this.composer.passes.indexOf(this.bloom));
+      if(mode==='steam'){
+        this.steamFlare=createNeonAnamorphicPass();
+        this.steamFlare.uniforms.threshold.value=1.4;this.steamFlare.uniforms.flare.value=.22;this.steamFlare.uniforms.oval.value=.15;
+        this.composer.insertPass(this.steamFlare,this.composer.passes.indexOf(this.bloom));
+      }
+    }
+    this.bloom.radius=mode==='steam'?.7:mode==='solar'?.85:.5;this.bloom.threshold=mode==='steam'?1.25:mode==='solar'?1.3:1.6;
+    this.grade.uniforms.uSteam.value=this.steamLook?1:0;
+    this.grade.uniforms.uSolar.value=this.solarLook?1:0;
+    this.grade.uniforms.uLetterbox.value=mode&&this.cinematic?1:0;
+    this.aerial?.setFocus(this.cinematic,this.grade.uniforms.uFocus.value);
+    this.applySteamPasses();this.setSize(this.width,this.height,this.dpr);
+  }
+
+  private applySteamPasses():void {
+    const active=this.renderPass.camera===this.mainCamera;
+    for(const pass of [this.sunShafts,this.steamFlare,this.aerial])if(pass)pass.enabled=active;
+    // A little lateral fringing reads as a real lens on the Solar look.
+    if(!this.extreme)this.grade.uniforms.uAberration.value=this.solarLook&&active?.00045:this.neon?.0009:.0001;
+  }
+
   /** Distance the replay bokeh keeps sharp, in metres from the camera. */
-  setFocusDistance(metres:number):void { this.grade.uniforms.uFocus.value=Math.max(1,metres); }
+  setFocusDistance(metres:number):void { this.grade.uniforms.uFocus.value=Math.max(1,metres); this.aerial?.setFocus(this.cinematic,metres); }
 
   private applyExtremePasses():void {
     const active=this.extreme&&this.renderPass.camera===this.mainCamera;
@@ -437,6 +525,7 @@ export class PostProcessing {
     this.resetMotionHistory();
     this.tape?.uniforms.resolution.value.set(width*dpr,height*dpr);
     this.anamorphic?.uniforms.resolution.value.set(width*dpr,height*dpr);
+    this.steamFlare?.uniforms.resolution.value.set(width*dpr,height*dpr);
     this.grade.uniforms.uBokeh.value=12*dpr;
     this.gtao.setSize(
       Math.max(1, Math.round(width * dpr * (this.extreme?.75:AO_RESOLUTION_SCALE))),
@@ -448,6 +537,8 @@ export class PostProcessing {
     this.cinematic=enabled;
     this.grade.uniforms.uVignette.value=enabled?.28:.15;
     this.grade.uniforms.uDof.value=enabled&&this.look?1:0;
+    this.grade.uniforms.uLetterbox.value=enabled&&(this.steamLook||this.solarLook)?1:0;
+    this.aerial?.setFocus(enabled,this.grade.uniforms.uFocus.value);
   }
 
   update(dt: number, telemetry: Telemetry): void {
@@ -460,7 +551,7 @@ export class PostProcessing {
     uniforms.uTime.value = this.time;
     uniforms.uSpeed.value = this.speed;
     uniforms.uDamage.value = this.damage;
-    this.bloom.strength = this.look ? .51 : this.neon ? .83 : this.daylight ? .07 : 0.04 + this.speed * 0.03;
+    this.bloom.strength = this.look ? .51 : this.steamLook ? .26 : this.solarLook ? .14 : this.neon ? .83 : this.daylight ? .07 : 0.04 + this.speed * 0.03;
   }
 
   /** Prepare every world material against the target used by the real race. */
@@ -509,6 +600,8 @@ export class PostProcessing {
     }
     this.atmosphere?.setSceneDepth(this.frameDepth?.target.texture??null,true);
     this.atmosphere?.update(this.time);
+    const daySun=this.renderPass.scene.userData.cinematicSun as THREE.Vector3|undefined;
+    this.sunShafts?.setSun(daySun,this.time);this.aerial?.setSun(daySun);
     try {this.composer.render();}
     finally {if(this.neon){this.renderPass.camera.projectionMatrix.copy(this.savedProjection);this.renderPass.camera.projectionMatrixInverse.copy(this.savedProjection).invert();}}
     if(this.neon){
@@ -521,7 +614,7 @@ export class PostProcessing {
   }
 
   dispose(): void {
-    for(const pass of [this.velocity,this.temporal,this.reflections,this.tape,this.anamorphic])pass?.dispose();
+    for(const pass of [this.velocity,this.temporal,this.reflections,this.tape,this.anamorphic,this.depthCapture,this.sunShafts,this.steamFlare,this.aerial])pass?.dispose();
     this.gtao.dispose();
     this.atmosphere?.dispose();
     this.frameDepth?.dispose();

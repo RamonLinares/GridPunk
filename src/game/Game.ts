@@ -530,6 +530,12 @@ export class Game {
             this.post.setEnabled(false);
         }
         this.environment.setCinematic?.(this.quality === 4);
+        if (this.spline.circuit.stage === 'solarpunk') {
+            // AgX rolls highlights off and desaturates them like film; ACES
+            // keeps the brighter, punchier look for the other tiers.
+            this.renderer.toneMapping = this.quality === 4 ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = this.quality === 4 ? 1.3 : 1;
+        }
         if (this.scene.fog instanceof THREE.FogExp2)
             this.scene.fog = this.sceneFog();
         this.syncSize(true);
@@ -540,8 +546,8 @@ export class Game {
      * a thin black one and leaves the rest to the atmosphere pass.
      */
     private sceneFog(): THREE.FogExp2 {
-        if (this.spline.circuit.stage === 'solarpunk') return new THREE.FogExp2(0xc3d8e6, .00036);
-        if (this.spline.circuit.stage === 'steampunk') return new THREE.FogExp2(0xb3a088, .00052);
+        if (this.spline.circuit.stage === 'solarpunk') return new THREE.FogExp2(0xc3d8e6, this.quality === 4 ? .00008 : .00036);
+        if (this.spline.circuit.stage === 'steampunk') return this.quality === 4 ? new THREE.FogExp2(0xb58a62, .0011) : new THREE.FogExp2(0xb3a088, .00052);
         return this.quality === 4 ? new THREE.FogExp2(0x000000, .0009) : new THREE.FogExp2(0x1c3848, .0022);
     }
     /** Auto mode steps both ways with separate thresholds and sustained windows. */

@@ -22,7 +22,7 @@ import { createSolarSkyLife } from './SolarSkyLife';
 export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
   const group = new THREE.Group(); group.name = 'solar-city'; group.userData.sceneryContainer = true; scene.add(group);
   // The post chain reads this for its daylight grade and bloom.
-  scene.userData.daylight = true;
+  scene.userData.daylight = true; scene.userData.solar = true;
   let seed = 4111;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   const spline = builder.spline;
@@ -466,20 +466,22 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   // --- Sky: deep blue, sun and halo, warm horizon haze and drifting cumulus. ---
   const sunDirection = new THREE.Vector3(-.65, .95, .5).normalize();
   const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uSun: { value: sunDirection }, uTime: { value: 0 } },
+    uniforms: { uSun: { value: sunDirection.clone() }, uTime: { value: 0 }, uCine: { value: 0 } },
     vertexShader: 'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: `varying vec3 vDir; uniform vec3 uSun; uniform float uTime;
+    fragmentShader: `varying vec3 vDir; uniform vec3 uSun; uniform float uTime, uCine;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
         return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
       float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<5;i++){s+=a*noise(p);p=p*2.03+vec2(17.,9.);a*=.5;}return s;}
       void main(){
         vec3 d=normalize(vDir); float h=clamp(d.y,-1.,1.);
-        vec3 zenith=vec3(.018,.15,.48), horizon=vec3(.18,.44,.78), ground=vec3(.46,.52,.44);
-        vec3 c=mix(horizon,zenith,pow(max(h,0.),.5));
+        vec3 zenith=mix(vec3(.018,.15,.48),vec3(.03,.12,.34),uCine), horizon=mix(vec3(.18,.44,.78),vec3(.5,.63,.78),uCine), ground=vec3(.46,.52,.44);
+        // Cinematic: a paler, milkier horizon band and a deeper zenith, as a real
+        // atmosphere scatters towards the horizon.
+        vec3 c=mix(horizon,zenith,pow(max(h,0.),mix(.5,.38,uCine)));
         c=mix(c,ground,smoothstep(0.,-.08,h));
         float s=max(dot(d,uSun),0.);
-        c+=vec3(1.,.93,.78)*(pow(s,8.)*.12+pow(s,64.)*.4);
+        c+=vec3(1.,.93,.78)*(pow(s,8.)*mix(.12,.3,uCine)+pow(s,64.)*.4);
         c+=vec3(.13,.08,.03)*exp(-max(h,0.)*6.);
         float cover=0.;
         if(h>.005){
@@ -489,7 +491,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
           float n=fbm(uv)*.72+fbm(uv*3.1+vec2(41.,7.))*.28;
           cover=smoothstep(.52,.6,n)*smoothstep(.01,.14,h);
           float body=smoothstep(.52,.8,n);
-          vec3 cloud=mix(vec3(.7,.75,.87),vec3(1.15,1.12,1.08),body);
+          vec3 cloud=mix(mix(vec3(.7,.75,.87),vec3(.42,.47,.57),uCine),vec3(1.15,1.12,1.08),body);
           cloud+=vec3(.3,.22,.1)*pow(s,3.)*(1.-body*.6);
           c=mix(c,cloud,cover);
         }
@@ -500,6 +502,8 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       }`.replace(/ #include/g, '\n #include') });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2300, 32, 20), skyMat); sky.name = 'solar-sky'; sky.frustumCulled = false; group.add(sky);
   const hemisphere = new THREE.HemisphereLight(0xd5e6ee, 0xa7a08b, 1.1); group.add(hemisphere);
+  const cinematicSun = new THREE.Vector3(-.72, .4, .56).normalize();
+  let baseEnvironment: number | undefined;
   const sunLighting = new SunLighting({ camera, parent: group, color: 0xfff0d4, intensity: 4.2, sunDirection, range: 520, splits: [42, 150], shadowMapSize: 2048 });
 
   const rounded = new RoundedBoxGeometry(1, 1, 1, 2, .08);
@@ -532,6 +536,16 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     createSkyProbeScene() { const probe = new THREE.Scene(); probe.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), skyMat)); return probe; },
     updateShadows: () => sunLighting.update(), prepareShadowMaterials: root => sunLighting.prepareMaterials(root),
     setShadows: enabled => sunLighting.setShadows(enabled), setShadowMapSize: size => sunLighting.setShadowMapSize(size), updateStandings: () => {},
+    setCinematic(enabled) {
+      // Mid-afternoon film light: a lower, harder key and less sky fill, so
+      // facades model into light and shade and the street carries long shadows.
+      const sun = enabled ? cinematicSun : sunDirection;
+      sunLighting.setDirection(sun); skyMat.uniforms.uSun.value.copy(enabled ? cinematicSun : sunDirection); skyMat.uniforms.uCine.value = enabled ? 1 : 0;
+      sunLighting.setColor(enabled ? 0xffd9ab : 0xfff0d4); sunLighting.setIntensity(enabled ? 6 : 4.2);
+      hemisphere.color.setHex(enabled ? 0xbac4cf : 0xd5e6ee); hemisphere.groundColor.setHex(enabled ? 0x96805f : 0xa7a08b); hemisphere.intensity = enabled ? .8 : 1.1;
+      baseEnvironment ??= scene.environmentIntensity; scene.environmentIntensity = enabled ? baseEnvironment * .85 : baseEnvironment;
+      scene.userData.cinematicSun = enabled ? cinematicSun : undefined;
+    },
     disposeExtraResources: () => { textures.forEach(t => t.dispose()); vegetation.dispose(); landmarks.dispose(); facades.dispose(); skyLife.dispose(); },
   };
 }

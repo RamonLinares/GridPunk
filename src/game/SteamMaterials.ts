@@ -45,8 +45,15 @@ export function createSteamMaterials() {
     w.fillStyle = '#403b32'; w.fillRect(x, y + 246, 256, 10);
   }
   const facadeMap = texture(windows);
-  const mapped = (map: THREE.Texture, name: string, metres: number) => {
+  /**
+   * Maps a texture in metres on every side of a unit box. Window atlases hold a
+   * 2×2 grid of bays, so `bays` fits a whole number of bays to each wall
+   * (stretching them by at most half a bay) instead of slicing the last column
+   * at a corner and the top row at a roof line or where stacked blocks meet.
+   */
+  const mapped = (map: THREE.Texture, name: string, metres: number, bays = false) => {
     const mat = new THREE.MeshStandardMaterial({ name, map, roughness: .88, color: 0xffffff });
+    const m = metres.toFixed(1);
     mat.onBeforeCompile = shader => {
       shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
         vec3 steamScale=vec3(1.);
@@ -55,16 +62,21 @@ export function createSteamMaterials() {
         #endif
         vec3 steamP=(position+vec3(.5))*steamScale;
         vec2 steamUV=abs(normal.y)>.5?steamP.xz:vec2(abs(normal.x)>.5?steamP.z:steamP.x,steamP.y);
+        ${bays ? `if(abs(normal.y)<=.5){
+          vec2 steamSize=vec2(abs(normal.x)>.5?steamScale.z:steamScale.x,steamScale.y);
+          vec2 steamBays=max(vec2(1.),floor(steamSize/(${m}*.5)+.5));
+          steamUV=(vec2(abs(normal.x)>.5?position.z:position.x,position.y)+.5)*steamBays*(${m}*.5);
+        }` : ''}
         #ifdef USE_MAP
-          vMapUv=steamUV/${metres.toFixed(1)};
+          vMapUv=steamUV/${m};
         #endif
       `);
     };
-    mat.customProgramCacheKey = () => `steam-metre-facade-${metres}`;
+    mat.customProgramCacheKey = () => `steam-metre-facade-${metres}-${bays}`;
     return mat;
   };
   const brick = mapped(brickMap, 'steam-brick', 5);
-  const facade = mapped(facadeMap, 'steam-arched-facade', 8);
+  const facade = mapped(facadeMap, 'steam-arched-facade', 8, true);
   // Distinct, metre-scaled elevations keep every side detailed, including distant blocks.
   const elevation = (kind: 'limestone' | 'soot' | 'glass') => {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 512;
@@ -88,7 +100,7 @@ export function createSteamMaterials() {
       for (const v of [94, 156]) ctx.fillRect(x + inset, y + v, 256 - inset * 2, 5);
       ctx.fillRect(x + inset - 12, y + 226, 280 - inset * 2, 10);
     }
-    return mapped(texture(canvas), `steam-${kind}-facade`, kind === 'glass' ? 6 : 8);
+    return mapped(texture(canvas), `steam-${kind}-facade`, kind === 'glass' ? 6 : 8, true);
   };
   const limestone = elevation('limestone'), soot = elevation('soot'), glazing = elevation('glass');
   const glass = new THREE.MeshStandardMaterial({ name: 'steam-roof-glass', color: 0x608782, roughness: .32, metalness: .35 });

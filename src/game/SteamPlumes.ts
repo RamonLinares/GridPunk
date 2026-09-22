@@ -24,9 +24,9 @@ export function createSteamPlumes(chimneys: THREE.Vector3[], valves: PressureVen
   geometry.setAttribute('flow', new THREE.InstancedBufferAttribute(new Float32Array(flows), 3));
   geometry.instanceCount = phases.length; base.dispose();
   const material = new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
-    uniforms: { time: { value: 0 } },
+    uniforms: { time: { value: 0 }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uCine: { value: 0 } },
     vertexShader: `attribute vec3 origin; attribute vec3 flow; attribute float phase; attribute float kind; attribute float seed;
-      uniform float time; varying vec2 puffUv; varying float age; varying float opacity; varying float variation;
+      uniform float time; varying vec2 puffUv; varying float age; varying float opacity; varying float variation; varying vec3 puffWorld;
       void main(){
         float lifetime=mix(13.,5.,kind);
         age=fract(phase+time/lifetime+seed*.13);
@@ -36,6 +36,7 @@ export function createSteamPlumes(chimneys: THREE.Vector3[], valves: PressureVen
         vec3 drift=flow*age;
         drift.x+=sin(seed+phase*24.+age*8.)*age*mix(2.4,.7,kind);
         drift.z+=cos(seed+phase*17.+age*7.)*age*mix(2.,.7,kind);
+        puffWorld=(modelMatrix*vec4(origin+drift,1.)).xyz;
         vec4 center=modelViewMatrix*vec4(origin+drift,1.);
         float size=mix(3.2+age*13.,1.1+age*7.,kind);
         float turn=seed+age*.65, c=cos(turn), s=sin(turn);
@@ -46,7 +47,8 @@ export function createSteamPlumes(chimneys: THREE.Vector3[], valves: PressureVen
         opacity=pulse*smoothstep(0.,.06,age)*(1.-smoothstep(.55,1.,age));
         opacity*=1.-smoothstep(650.,1050.,-center.z);
       }`,
-    fragmentShader: `varying vec2 puffUv; varying float age; varying float opacity; varying float variation;
+    fragmentShader: `varying vec2 puffUv; varying float age; varying float opacity; varying float variation; varying vec3 puffWorld;
+      uniform vec3 uSun; uniform float uCine;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
       void main(){
@@ -55,6 +57,15 @@ export function createSteamPlumes(chimneys: THREE.Vector3[], valves: PressureVen
         float a=(1.-smoothstep(.12,.49,edge))*opacity*.24;
         if(a<.004)discard;
         vec3 color=mix(vec3(.62,.65,.66),vec3(.95,.94,.89),clamp(puffUv.y*.65+n*.45,0.,1.));
+        if(uCine>.5){
+          // Golden hour: warm lit tops, cool undersides, and a bright silver
+          // lining when a plume sits between the camera and the low sun.
+          float lit=clamp(puffUv.y*.8+n*.35,0.,1.);
+          color=mix(vec3(.34,.33,.38),vec3(1.12,.8,.52),lit);
+          float glow=pow(max(dot(normalize(puffWorld-cameraPosition),uSun),0.),10.);
+          color+=vec3(1.9,1.1,.5)*glow*(1.-smoothstep(.2,.49,edge));
+          a*=1.25;
+        }
         gl_FragColor=vec4(color,a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

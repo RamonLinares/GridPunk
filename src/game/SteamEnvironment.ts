@@ -13,7 +13,7 @@ type Site = { x: number; z: number; r: number; angle: number; progress: number; 
 /** A Victorian industrial city fitted around the selected road layout. */
 export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
   const group = new THREE.Group(); group.name = 'steam-city'; group.userData.sceneryContainer = true; scene.add(group);
-  scene.userData.daylight = true;
+  scene.userData.daylight = true; scene.userData.steam = true;
   const m = createSteamMaterials(), spline = builder.spline;
   let seed = 1886;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -270,23 +270,31 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     mesh.castShadow = ![m.brass, m.lamp, m.glass].includes(batch.mat as THREE.MeshStandardMaterial) && batch.geo !== ring && batch.geo !== plane;
     mesh.receiveShadow = true; group.add(mesh);
   }
+  // Cinematic tier: a low golden-hour sun with a hot disc and a wide glow; the
+  // default overcast afternoon keeps the original sun and gradient.
+  const daySun = new THREE.Vector3(-.6, .65, .4).normalize(), goldenSun = new THREE.Vector3(-.8, .27, .53).normalize();
   const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { time: { value: 0 } },
+    uniforms: { time: { value: 0 }, uSun: { value: new THREE.Vector3(-.6, .5, .4).normalize() }, uCine: { value: 0 } },
     vertexShader: 'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: `varying vec3 direction; uniform float time;
+    fragmentShader: `varying vec3 direction; uniform float time,uCine; uniform vec3 uSun;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
-      void main(){vec3 d=normalize(direction);float h=max(d.y,0.); vec3 c=mix(vec3(.69,.46,.25),vec3(.12,.25,.31),pow(h,.45));
+      void main(){vec3 d=normalize(direction);float h=max(d.y,0.);float sun=max(dot(d,uSun),0.);
+      vec3 low=mix(vec3(.69,.46,.25),vec3(1.05,.52,.2),uCine),high=mix(vec3(.12,.25,.31),vec3(.1,.17,.27),uCine);
+      vec3 c=mix(low,high,pow(h,mix(.45,.32,uCine)));
       vec2 uv=d.xz/(h+.25)*3.+time*.002;float n=noise(uv)*.6+noise(uv*2.7)*.3+noise(uv*8.)*.1;
-      c=mix(c,vec3(.62,.56,.45),smoothstep(.54,.75,n)*smoothstep(.02,.15,h)*.65);
-      float sun=max(dot(d,normalize(vec3(-.6,.5,.4))),0.);c+=vec3(1.,.7,.32)*pow(sun,70.)*.4;
-      c=mix(c,vec3(.37,.33,.27),smoothstep(0.,-.15,d.y));gl_FragColor=vec4(c,1.);
+      // Clouds catch the sun from below at golden hour: bright rims towards the sun, dusky elsewhere.
+      vec3 cloud=mix(vec3(.62,.56,.45),mix(vec3(.36,.25,.24),vec3(1.5,.78,.38),pow(sun,3.)),uCine);
+      c=mix(c,cloud,smoothstep(.54,.75,n)*smoothstep(.02,.15,h)*mix(.65,.8,uCine));
+      c+=vec3(1.,.7,.32)*pow(sun,70.)*.4*(1.-uCine);
+      c+=uCine*(vec3(1.,.55,.2)*(pow(sun,8.)*.28+pow(sun,90.)*.9)+vec3(1.,.82,.55)*smoothstep(.9994,.9998,sun)*8.);
+      c=mix(c,mix(vec3(.37,.33,.27),vec3(.3,.19,.12),uCine),smoothstep(0.,-.15,d.y));gl_FragColor=vec4(c,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }` });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2600, 32, 16), skyMat); sky.name = 'steam-sky'; sky.frustumCulled = false; group.add(sky);
   const hemisphere = new THREE.HemisphereLight(0xd1dadd, 0x806445, 1.35); group.add(hemisphere);
-  const sunLighting = new SunLighting({ camera, parent: group, color: 0xffdbac, intensity: 3.3, sunDirection: new THREE.Vector3(-.6, .65, .4).normalize(), range: 520, splits: [42, 150], shadowMapSize: 2048 });
+  const sunLighting = new SunLighting({ camera, parent: group, color: 0xffdbac, intensity: 3.3, sunDirection: daySun, range: 520, splits: [42, 150], shadowMapSize: 2048 });
   group.userData.scenery = { buildings: occupied.length - sites.length, vents: vents.length, pressureVents: pressureVents.length, steamParticles: steam.userData.particles, facadeGears, animatedGears: animated.length, airships: airships.length, buildingStyles: buildingKit.styles, features: buildingKit.features };
   const update = (focus?: THREE.Vector3, seconds = 0) => {
     if (focus) sky.position.copy(focus);
@@ -305,5 +313,17 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     createSkyProbeScene() { const probe = new THREE.Scene(); probe.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), skyMat)); return probe; },
     updateShadows: () => sunLighting.update(), prepareShadowMaterials: root => sunLighting.prepareMaterials(root),
     setShadows: enabled => sunLighting.setShadows(enabled), setShadowMapSize: size => sunLighting.setShadowMapSize(size), updateStandings: () => {},
+    setCinematic(enabled) {
+      // Golden hour: the key light drops to the skyline and turns amber, the
+      // sky fill cools so shadows read blue, and the gas lamps are lit.
+      sunLighting.setDirection(enabled ? goldenSun : daySun);
+      sunLighting.setColor(enabled ? 0xffa45c : 0xffdbac); sunLighting.setIntensity(enabled ? 4.4 : 3.3);
+      hemisphere.color.setHex(enabled ? 0x7f9bbd : 0xd1dadd); hemisphere.groundColor.setHex(enabled ? 0x5c3b24 : 0x806445);
+      hemisphere.intensity = enabled ? .95 : 1.35;
+      skyMat.uniforms.uSun.value.copy(enabled ? goldenSun : new THREE.Vector3(-.6, .5, .4).normalize()); skyMat.uniforms.uCine.value = enabled ? 1 : 0;
+      steamMaterial.uniforms.uSun.value.copy(goldenSun); steamMaterial.uniforms.uCine.value = enabled ? 1 : 0;
+      m.lamp.emissiveIntensity = enabled ? 3.4 : 1.2;
+      scene.userData.cinematicSun = enabled ? goldenSun : undefined;
+    },
     disposeExtraResources: () => m.dispose() };
 }

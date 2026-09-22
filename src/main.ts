@@ -244,7 +244,7 @@ const qualityDescriptions: Record<QualityPreset, string> = {
     performance: '0.8 DPR cap · shadows and post processing off.',
     quality: 'Full shadows, bloom and smooth edges.',
     extreme: 'Volumetric fog, reflections, motion blur and VHS colour. Highest GPU demand.',
-    cinematic: 'Extreme plus the Neon Signal look: black-sky mist, AgX grade, tape bleed, anamorphic streaks and replay bokeh.',
+    cinematic: 'Extreme plus a graded look. Cyberpunk: black-sky mist, tape bleed and replay bokeh. Solarpunk: afternoon sun, aerial haze and a film-print grade. Steampunk: golden-hour sun shafts and lit gas lamps. Letterboxed replays.',
 };
 const qualitySetting = document.createElement('div');
 qualitySetting.className = 'quality-setting assist-setting';
