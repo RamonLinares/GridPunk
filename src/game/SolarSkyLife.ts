@@ -26,7 +26,7 @@ export function createSolarSkyLife(spline: TrackSpline, occupied: readonly Plot[
   const sc = signCanvas.getContext('2d')!; sc.fillStyle = '#244f40'; sc.fillRect(0, 0, 1024, 256);
   sc.fillStyle = '#c4dda0'; sc.beginPath(); sc.ellipse(105, 125, 67, 33, -.7, 0, Math.PI * 2); sc.fill();
   sc.strokeStyle = '#244f40'; sc.lineWidth = 9; sc.beginPath(); sc.moveTo(54, 172); sc.lineTo(154, 78); sc.stroke();
-  sc.fillStyle = '#f4edd6'; sc.font = 'bold 92px Arial'; sc.fillText('KAIRO SOLAR', 201, 129);
+  sc.fillStyle = '#f4edd6'; sc.font = 'bold 92px Arial'; sc.fillText(spline.circuit.shortName.toUpperCase(), 201, 129);
   sc.fillStyle = '#c4dda0'; sc.font = '29px Arial'; sc.fillText('CLEAN SKIES  /  SHARED HORIZONS', 205, 185);
   const signMap = new THREE.CanvasTexture(signCanvas); signMap.colorSpace = THREE.SRGBColorSpace; signMap.anisotropy = 8;
   const sign = new THREE.MeshStandardMaterial({ map: signMap, roughness: .8 });

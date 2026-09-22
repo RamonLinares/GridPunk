@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { TrackBuilder } from '../game/track/TrackBuilder';
 import type { Car } from '../entities/Car';
 import {applyPoses,sampleReplay,type RecordedLap} from './LapReplay';
+import {ReplayVisibility} from './ReplayVisibility';
 
 const SHOTS=[4.2,3.2,3.4,4.5,3.6,3];
 const CYCLE=SHOTS.reduce((a,b)=>a+b,0);
@@ -11,11 +12,12 @@ export class ReplayDirector {
   private previousShot=-1;
   private readonly offset=new THREE.Vector3();
   private readonly aim=new THREE.Vector3();
-  private readonly forward=new THREE.Vector3();
-  private readonly ray=new THREE.Raycaster();
+  private readonly visibility:ReplayVisibility;
   private readonly q=new THREE.Quaternion();
   constructor(private readonly lap:RecordedLap,private readonly cars:readonly Car[],private readonly camera:THREE.PerspectiveCamera,
-    private readonly builder:TrackBuilder,private readonly obstructions:THREE.Object3D[]){}
+    builder:TrackBuilder,obstructions:THREE.Object3D[]){
+    this.visibility=new ReplayVisibility(obstructions,(x,z,y)=>builder.surfaceHeightAt(x,z,y));
+  }
   private pose(time:number){
     const s=sampleReplay(this.lap,THREE.MathUtils.clamp(time,0,this.lap.duration));
     const p=new THREE.Vector3().fromArray(s.a.poses),next=new THREE.Vector3().fromArray(s.b.poses);
@@ -64,15 +66,16 @@ export class ReplayDirector {
       place(anchor,-5.6,.95,2);this.aim.lerp(anchor.p.clone().add(new THREE.Vector3(0,.5,0)),.07);
       this.camera.fov=47;
     }
-    const ground=this.builder.surfaceHeightAt(this.offset.x,this.offset.z,current.p.y);
-    if(ground!==undefined)this.offset.y=Math.max(this.offset.y,ground+.65);
-    this.forward.subVectors(this.offset,this.aim);const distance=this.forward.length();this.forward.normalize();
-    this.ray.set(this.aim,this.forward);this.ray.far=distance+.35;
-    const hit=this.ray.intersectObjects(this.obstructions,true)[0];
-    if(hit)this.offset.copy(this.aim).addScaledVector(this.forward,Math.max(1.8,hit.distance-.55));
+    const angle=this.visibility.resolve(this.offset,current.p,current.q);
+    if(angle){
+      this.aim.copy(current.p).add(new THREE.Vector3(0,.65,0));
+      // Keep the entire car in frame, including portrait replay exports.
+      const fieldOfView=angle>=7?110:55;
+      this.camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(fieldOfView)/2)/Math.min(1,this.camera.aspect)));
+    }
     this.camera.position.copy(this.offset);this.camera.up.set(0,1,0);this.camera.lookAt(this.aim);this.camera.updateProjectionMatrix();
-    const id=cycle*SHOTS.length+shot,cut=id!==this.previousShot;this.previousShot=id;
+    const id=(cycle*SHOTS.length+shot)*10+angle,cut=id!==this.previousShot;this.previousShot=id;
     this.camera.updateMatrixWorld();
-    return{...sample,cut,shot};
+    return{...sample,cut,shot,angle};
   }
 }

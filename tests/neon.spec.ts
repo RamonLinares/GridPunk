@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const TITLES = { neon: 'Neon District', kairo: 'Kairo Loop', solar: 'Kairo Solar' } as const;
-for (const circuit of ['neon', 'kairo', 'solar'] as const) test(`${circuit} loads, drives, pauses, restarts and changes cars`, async ({ page, isMobile }, info) => {
+const TITLES = { neon: 'Neon District', kairo: 'Kairo Loop', solar: 'Kairo Solar', steam: 'Kairo Steam', 'neon-solar': 'Neon Solar', 'neon-steam': 'Neon Steam' } as const;
+for (const circuit of ['neon', 'kairo', 'solar', 'steam', 'neon-solar', 'neon-steam'] as const) test(`${circuit} loads, drives, pauses, restarts and changes cars`, async ({ page, isMobile }, info) => {
   const errors: string[] = [], missing: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });

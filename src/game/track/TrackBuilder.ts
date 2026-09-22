@@ -1,5 +1,7 @@
+import { isNeonLayout } from './circuits';
 import { NEON_TUNNEL } from './NeonProfile';
 import { createNeonRaceBoard } from '../NeonLedSigns';
+import { createSteamRaceBoard } from '../SteamMaterials';
 import * as THREE from 'three';
 import type { MaterialLibrary } from '../Materials';
 import type { TrackSample, TrackSpline } from './TrackSpline';
@@ -238,7 +240,7 @@ export class TrackBuilder {
         const right = this.halfWidth.slice();
         const road = this.makeRibbon(left, right, 0.04, this.materials.asphalt, 22);
         road.name = 'road';
-        if (this.spline.circuitId === 'neon') {
+        if (isNeonLayout(this.spline.circuitId)) {
             // A baked ambient-occlusion term under concrete decks prevents the sky
             // fill from illuminating the enclosed road as if it were in open air.
             const colors: number[] = [];
@@ -738,7 +740,8 @@ export class TrackBuilder {
         // Only the two road-facing sign faces receive the canvas artwork. BoxGeometry
         // orders materials as ±X, ±Y, +Z, −Z, keeping the narrow edge faces solid
         // dark metal instead of stretching the lettering around the gantry.
-        const bannerFace = createNeonRaceBoard('START / FINISH', `${this.spline.circuit.shortName.toUpperCase()} / RACE CONTROL`, '#80e9ff');
+        const bannerFace = this.spline.circuit.stage !== 'cyberpunk' ? createSteamRaceBoard(this.spline.circuit.shortName, this.spline.circuit.stage === 'solarpunk')
+            : createNeonRaceBoard('START / FINISH', `${this.spline.circuit.shortName.toUpperCase()} / RACE CONTROL`, '#80e9ff');
         const banner = new THREE.Mesh(new THREE.BoxGeometry(beamLength * 0.92, 1.6, .28), [gantryMaterial, gantryMaterial, gantryMaterial, gantryMaterial, bannerFace, bannerFace]);
         banner.name = 'start-finish-banner-face-only';
         banner.position.copy(midBase).addScaledVector(up, 5.2);

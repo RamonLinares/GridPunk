@@ -1,6 +1,6 @@
 import './styles.css';
 import { installReplayPanel } from './systems/ReplayPanel';
-import { CIRCUITS, selectedCircuit, type CircuitId } from './game/track/circuits';
+import { STAGES, LAYOUT_NAMES, circuitsForStage, circuitFor, selectedCircuit, isDryCircuit, type CircuitId, type StageId } from './game/track/circuits';
 import { GamepadActions } from './core/GamepadActions';
 import { Game } from './game/Game';
 import type { OpponentDifficulty } from './systems/AiDriver';
@@ -34,9 +34,10 @@ document.title = `GridPunk — ${circuit.shortName}`;
 canvas.setAttribute('aria-label', `${circuit.name} driving game`);
 document.querySelector('.session-eyebrow')!.innerHTML = '<span class="circuit-mark">///</span> GRIDPUNK';
 document.querySelector('#circuit-corners')!.textContent = String(circuit.cornerCount);
-const daylight = circuit.id === 'solar';
-document.body.classList.toggle('solar-race', daylight);
-document.querySelector('.session-location')!.innerHTML = `<span>${circuit.lengthLabel} KM · ${daylight ? 'DAY' : 'NIGHT'} STREET RACE</span>`;
+const daylight = isDryCircuit(circuit.id);
+document.body.classList.toggle('solar-race', circuit.stage === 'solarpunk');
+document.body.classList.toggle('steam-race', circuit.stage === 'steampunk');
+document.querySelector('.session-location')!.innerHTML = `<span>${circuit.lengthLabel} KM · ${circuit.stage === 'steampunk' ? 'SUNSET' : daylight ? 'DAY' : 'NIGHT'} STREET RACE</span>`;
 {
     document.body.classList.add('neon-race');
     document.querySelector('.session-specs > div:last-child b')!.textContent = daylight ? 'SUN' : 'RAIN';
@@ -47,22 +48,30 @@ document.querySelector('.session-location')!.innerHTML = `<span>${circuit.length
     description.textContent = '';
     document.querySelector('.course-credit')!.innerHTML = '<a href="/credits.html">Credits &amp; licences</a>';
 }
-// Circuit changes start a fresh sprint while preserving car/debug URL options.
+// Stage changes keep the road layout; every stage/layout pair has its own race identity.
+const navigateCircuit = (id: CircuitId, stage: StageId) => {
+    if (id === circuit.id) return;
+    const url = new URL(location.href);
+    url.searchParams.set('stage', stage);
+    url.searchParams.set('circuit', id);
+    location.assign(url.href);
+};
+const stagePicker = document.createElement('div');
+stagePicker.className = 'assist-setting stage-picker';
+stagePicker.innerHTML = `<span class="hud-label">STAGE</span><div class="assist-row" role="group" aria-label="Stage">${Object.values(STAGES).map(stage => `<button type="button" data-stage="${stage.id}" aria-pressed="${stage.id === circuit.stage}" class="${stage.id === circuit.stage ? 'active' : ''}">${stage.name.toUpperCase()}</button>`).join('')}</div><p>${STAGES[circuit.stage].description}</p>`;
+document.querySelector('.session-specs')!.insertAdjacentElement('afterend', stagePicker);
+stagePicker.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach(button => {
+    button.addEventListener('click', () => {
+        const stage = button.dataset.stage as StageId;
+        navigateCircuit(circuitFor(stage, circuit.layout).id, stage);
+    }, { signal });
+});
 const circuitPicker = document.createElement('div');
 circuitPicker.className = 'assist-setting circuit-picker';
-circuitPicker.innerHTML = `<span class="hud-label">CIRCUIT</span><div class="assist-row" role="group" aria-label="Circuit">${Object.values(CIRCUITS).map(option => `<button type="button" data-circuit="${option.id}">${option.shortName.toUpperCase()}</button>`).join('')}</div><p>Changing circuit starts a new sprint.</p>`;
-document.querySelector('.session-specs')!.insertAdjacentElement('afterend', circuitPicker);
+circuitPicker.innerHTML = `<span class="hud-label">CIRCUIT · ${STAGES[circuit.stage].name.toUpperCase()}</span><div class="assist-row" role="group" aria-label="Circuit">${circuitsForStage(circuit.stage).map(option => `<button type="button" data-circuit="${option.id}" aria-pressed="${option.id === circuit.id}" class="${option.id === circuit.id ? 'active' : ''}"><span>${LAYOUT_NAMES[option.layout].toUpperCase()}</span><small>${option.lengthLabel} KM · ${option.cornerCount} CORNERS</small></button>`).join('')}</div><p>Changing stage or circuit starts a new sprint.</p>`;
+stagePicker.insertAdjacentElement('afterend', circuitPicker);
 circuitPicker.querySelectorAll<HTMLButtonElement>('[data-circuit]').forEach(button => {
-    const selected = button.dataset.circuit === circuit.id;
-    button.classList.toggle('active', selected);
-    button.setAttribute('aria-pressed', String(selected));
-    button.addEventListener('click', () => {
-        const id = button.dataset.circuit as CircuitId;
-        if (id === circuit.id) return;
-        const url = new URL(location.href);
-        url.searchParams.set('circuit', id);
-        location.assign(url.href);
-    }, { signal });
+    button.addEventListener('click', () => navigateCircuit(button.dataset.circuit as CircuitId, circuit.stage), { signal });
 });
 const activeSteers = new Map<number, number>();
 {

@@ -37,8 +37,12 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
     const MIN = 8.4; // keep props off the racing surface
     // ---------------- Advertising banners on the barriers ----------------
     // Kairo Solar prints its sponsors on fabric; the night circuits run LED boards.
-    const daylight = builder.spline.circuitId === 'solar';
-    const bannerTexts: [string, string, string, string][] = daylight ? [
+    const steam = builder.spline.circuit.stage === 'steampunk';
+    const daylight = builder.spline.circuit.stage === 'solarpunk' || steam;
+    const bannerTexts: [string, string, string, string][] = steam ? [
+        [builder.spline.circuit.shortName.toUpperCase(), '#302720', '#ecd5a5', 'FORGED IN FIRE. DRIVEN BY STEAM.'],
+        ['IRONWORKS', '#292c2b', '#d5ab6b', 'PRECISION UNDER PRESSURE'],
+    ] : daylight ? [
         [builder.spline.circuit.shortName.toUpperCase(), '#28332e', '#f3f7ef', 'RACING FOR A BRIGHTER TOMORROW'],
         ['GRIDLINK', '#303a34', '#c6df8b', 'CLEAN ENERGY. HIGHER PERFORMANCE.'],
     ] : [
@@ -157,7 +161,7 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
         parts[ti].forEach(part => part.dispose());
         if (!geometry)
             return;
-        const material = daylight ? printedBanner(text, sub, bg, fg, ti >= bannerTexts.length) : createNeonRaceBoard(text, sub, fg, ti >= bannerTexts.length);
+        const material = daylight ? printedBanner(text, sub, bg, fg, ti >= bannerTexts.length, steam) : createNeonRaceBoard(text, sub, fg, ti >= bannerTexts.length);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `barrier-advertising-${ti}`;
         group.add(mesh);
@@ -254,7 +258,7 @@ function brakeTexture(text: string): THREE.CanvasTexture {
 }
 
 /** Printed fabric sponsor banner with a leaf mark; matte, never emissive. */
-function printedBanner(title: string, subtitle: string, background: string, ink: string, compact: boolean): THREE.MeshStandardMaterial {
+function printedBanner(title: string, subtitle: string, background: string, ink: string, compact: boolean, steam = false): THREE.MeshStandardMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = compact ? 512 : 1280;
   canvas.height = 80;
@@ -266,11 +270,21 @@ function printedBanner(title: string, subtitle: string, background: string, ink:
   ctx.textBaseline = 'middle';
   ctx.font = `900 ${compact ? 40 : 46}px Titillium Web, Arial, sans-serif`;
   ctx.fillText(title, canvas.width / 2 + 10, compact ? 40 : 30);
+  const titleWidth = ctx.measureText(title).width;
   if (!compact) {
     ctx.font = '700 17px Titillium Web, Arial, sans-serif';
     ctx.fillText(subtitle, canvas.width / 2 + 10, 62);
   }
-  const size = compact ? 44 : 50, x = canvas.width / 2 - ctx.measureText(title).width / 2 - (compact ? 60 : 110), y = (canvas.height - size) / 2;
+  const size = compact ? 44 : 50, x = canvas.width / 2 - titleWidth / 2 - (compact ? 60 : 70), y = (canvas.height - size) / 2;
+  if (steam) {
+    ctx.beginPath();
+    for (let k = 0; k <= 48; k++) {
+      const a = k / 48 * Math.PI * 2, r = size * (k % 4 < 2 ? .5 : .4);
+      const px = x + size / 2 + Math.cos(a) * r, py = y + size / 2 + Math.sin(a) * r;
+      if (!k) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.fill(); ctx.fillStyle = background; ctx.beginPath(); ctx.arc(x + size / 2, y + size / 2, size * .21, 0, Math.PI * 2); ctx.fill();
+  } else {
   ctx.beginPath();
   ctx.moveTo(x, y + size);
   ctx.quadraticCurveTo(x, y, x + size, y);
@@ -282,6 +296,7 @@ function printedBanner(title: string, subtitle: string, background: string, ink:
   ctx.moveTo(x + size * .12, y + size * .88);
   ctx.lineTo(x + size * .7, y + size * .3);
   ctx.stroke();
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;

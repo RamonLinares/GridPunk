@@ -1,6 +1,6 @@
 # GridPunk
 
-A cyberpunk racing game set in **Neon District**. Three laps, six cars, two rain-soaked night circuits, Neon District (3.744 km) and Kairo Loop (5.807 km), and Kairo Solar, the same loop by day in a solarpunk garden city.
+A racing game with three stages: **Cyberpunk**, **Solarpunk**, and **Steampunk**. Each stage contains **Neon District** (3.744 km, 12 corners) and **Kairo Loop** (5.807 km, 18 corners). Three laps, six cars, and independent lap records for all six stage/circuit combinations.
 
 [Play GridPunk](https://gridpunk.smallweblab.com/) · [GitHub repository](https://github.com/RamonLinares/GridPunk)
 
@@ -8,12 +8,16 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, two rain
 
 ## Play
 
-[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your circuit and car, then press **Start race**.
+[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your stage, circuit and car, then press **Start race**.
 
 ## What's included
 
+- Three stage selectors, each with two circuit cards. Switching stage retains the selected layout and car. Existing circuit links and records remain compatible.
+- Neon Solar and Neon Steam: the original District centreline, banked turns and tunnel ported into garden-city and foundry-city scenery. The themed underpasses retain 7.2 m clearance. Open `?stage=solarpunk&circuit=neon` or `?stage=steampunk&circuit=neon`. See [stage and circuit notes](docs/stages.md).
+
 - Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover and a giant animated Ferris wheel with pink rim lights, ramen and bonsai holograms, and a Mars video billboard. Open directly with `?circuit=kairo`.
 - Kairo Solar: the Kairo layout in daylight. Terraced blocks draped in vines and living walls, rooftop solar arrays, hedges, flower beds and big street trees along the whole loop, grandstands, glass garden towers, solar farms, wind turbines against mountains and a bay, cumulus skies and cascaded sun shadows. Open directly with `?circuit=solar`.
+- Kairo Steam: the exact Kairo layout through brick factories, copper pipe gantries, gas lanterns, turning flywheels, the Clockworks tower, Boiler Works and Royal Kairo Aerodrome. Cargo dirigibles and rooftop steam animate the sunset skyline. Select it in the circuit menu or open `?circuit=steam`. See [the circuit notes](docs/kairo-steam.md).
 - Solar landmarks: Helios Grove's branching solar collectors, The Glasshouse's botanical conservatory, and Harvest Commons' vertical farm and market, with rainwater tanks, growing beds and public plazas.
 - Shinsei ND-01 and Kurogane K89-R, with a mixed grid of five AI rivals.
 - Neon city, skyways, elevated/banked road sections, tunnel, wet surfaces, animated signs, flying traffic and video holograms.

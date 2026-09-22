@@ -1,8 +1,9 @@
+import { applySteamLivery } from '../entities/SteamLivery';
 import { solarRoadSurface } from './SolarSurfaces';
 import { applySolarLivery } from '../entities/SolarLivery';
 import { NEON_TUNNEL, neonRainExposure } from './track/NeonProfile';
 import { createKairoCityBridge } from './KairoCityBridge';
-import { selectedCircuit, isKairoLayout } from './track/circuits';
+import { selectedCircuit, isKairoLayout, isNeonLayout, isDryCircuit } from './track/circuits';
 import * as THREE from 'three';
 import { disposeObject3D } from '../utils/dispose';
 import { InputController } from '../core/InputController';
@@ -20,6 +21,7 @@ import { TrackSpline } from './track/TrackSpline';
 import { CameraRig } from '../systems/CameraRig';
 import { LapReplayRecorder, capturePoses, applyPoses, replayMotion } from '../systems/LapReplay';
 import { ReplayDirector } from '../systems/ReplayDirector';
+import { collectReplayObstructions } from '../systems/ReplayVisibility';
 import { Hud } from '../systems/Hud';
 import { Timing } from '../systems/Timing';
 import { readPersonalBest, savePersonalBest } from '../systems/PersonalBests';
@@ -165,8 +167,8 @@ export class Game {
         this.materials = createMaterials();
         await yieldToBrowser();
         this.spline = new TrackSpline(selectedCircuit());
-        this.renderer.toneMapping = this.spline.circuitId === 'solar' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
-        if (this.spline.circuitId === 'solar') {
+        this.renderer.toneMapping = isDryCircuit(this.spline.circuitId) ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
+        if (this.spline.circuit.stage === 'solarpunk') {
             // Dry daylight tarmac, grass verges and pale concrete walls.
             this.materials.asphalt.color.setHex(0xb1b1aa);
             this.materials.asphalt.roughness = .86;
@@ -176,6 +178,16 @@ export class Game {
             this.materials.runoffAsphalt.roughness = .95;
             this.materials.barrier.color.setHex(0xd9d3c4);
             this.materials.concrete.color.setHex(0xd8d4c8);
+        }
+        else if (this.spline.circuit.stage === 'steampunk') {
+            solarRoadSurface(this.materials.asphalt);
+            this.materials.asphalt.color.setHex(0xa19a8b);
+            this.materials.asphalt.metalness = 0;
+            this.materials.runoffAsphalt.color.setHex(0x776a57);
+            this.materials.barrier.color.setHex(0x635544);
+            this.materials.concrete.color.setHex(0x847967);
+            this.materials.grass.color.setHex(0x67604d);
+            this.materials.darkMetal.color.setHex(0x403b34);
         }
         else {
             this.materials.asphalt.color.setHex(0x8196a4);
@@ -203,7 +215,8 @@ export class Game {
             await Promise.all([preloadNeonCarModel(), preloadShinseiCarModel()]);
         }
         this.car = new Car(this.builder, {}, neonVehicle);
-        if (this.spline.circuitId === 'solar') applySolarLivery(this.car.group);
+        if (this.spline.circuit.stage === 'solarpunk') applySolarLivery(this.car.group, this.spline.circuit.shortName);
+        if (this.spline.circuit.stage === 'steampunk') applySteamLivery(this.car.group, this.spline.circuit.shortName);
         // Human steering ergonomics (speed-weighted lock and time-to-lock). The
         // rivals' controller is tuned in raw wheel angle and keeps the default.
         this.car.physics.setDriverSteering(true);
@@ -280,7 +293,7 @@ export class Game {
         // A daytime sky probe is bright enough to light every surface on its own,
         // flattening the sun shading and hiding the cascade shadows. Keep it for
         // reflections only on the solar circuit; the night probe stays as is.
-        this.scene.environmentIntensity = this.spline.circuitId === 'solar' ? .65 : 1;
+        this.scene.environmentIntensity = isDryCircuit(this.spline.circuitId) ? .65 : 1;
         probe.traverse(object => { (object as THREE.Mesh).geometry?.dispose(); });
         pmrem.dispose();
         await yieldToBrowser();
@@ -527,7 +540,8 @@ export class Game {
      * a thin black one and leaves the rest to the atmosphere pass.
      */
     private sceneFog(): THREE.FogExp2 {
-        if (this.spline.circuitId === 'solar') return new THREE.FogExp2(0xc3d8e6, .00036);
+        if (this.spline.circuit.stage === 'solarpunk') return new THREE.FogExp2(0xc3d8e6, .00036);
+        if (this.spline.circuit.stage === 'steampunk') return new THREE.FogExp2(0xb3a088, .00052);
         return this.quality === 4 ? new THREE.FogExp2(0x000000, .0009) : new THREE.FogExp2(0x1c3848, .0022);
     }
     /** Auto mode steps both ways with separate thresholds and sustained windows. */
@@ -663,11 +677,7 @@ export class Game {
             hidden.push([guide, guide.visible]);
             guide.visible = false;
         }
-        const obstructions: THREE.Object3D[] = [];
-        this.scene.traverse(o => {
-            if (/tunnel.*shell|escape.*barrier/.test(o.name))
-                obstructions.push(o);
-        });
+        const obstructions = collectReplayObstructions(this.scene);
         this.replay = { director: new ReplayDirector(lap, cars, this.camera, this.builder, obstructions), time: 0, playing: true, exporting: false,
             saved: capturePoses(cars, true), hidden, fov: this.camera.fov, cameraMode: this.cameraRig.mode };
         this.vfx.setVisible(false);
@@ -1215,11 +1225,11 @@ export class Game {
             } }));
     }
     private rainExposureAt(progressMetres: number): number {
-        if (this.spline.circuitId === 'solar') return 0;
+        if (isDryCircuit(this.spline.circuitId)) return 0;
         return this.spline.circuitId === 'neon' ? neonRainExposure(progressMetres / this.spline.length, this.spline.length) : 1;
     }
     private tunnelMixAt(progressMetres: number): number {
-        if (this.spline.circuitId !== 'neon') return 0;
+        if (!isNeonLayout(this.spline.circuitId)) return 0;
         const entry = (NEON_TUNNEL.start) * this.spline.length;
         const exit = (NEON_TUNNEL.end) * this.spline.length;
         const enter = THREE.MathUtils.smoothstep(progressMetres, entry - 18, entry + 22);

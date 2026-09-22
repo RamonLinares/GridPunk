@@ -1,6 +1,8 @@
+import { createStageTunnel } from './StageTunnel';
 import * as THREE from 'three';
 import { createNeonEnvironment } from './NeonEnvironment';
 import { createSolarEnvironment } from './SolarEnvironment';
+import { createSteamEnvironment } from './SteamEnvironment';
 import type { TrackBuilder } from './track/TrackBuilder';
 import type { PylonEntry } from './ScoringPylon';
 import type { SunLighting } from '../systems/SunLighting';
@@ -30,5 +32,14 @@ export interface EnvironmentHandles {
 }
 
 export function createEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
-  return builder.spline.circuitId === 'solar' ? createSolarEnvironment(scene, builder, camera) : createNeonEnvironment(scene, builder, camera);
+  const stage = builder.spline.circuit.stage;
+  const environment = stage === 'steampunk' ? createSteamEnvironment(scene, builder, camera)
+    : stage === 'solarpunk' ? createSolarEnvironment(scene, builder, camera) : createNeonEnvironment(scene, builder, camera);
+  if (stage !== 'cyberpunk' && builder.spline.circuit.layout === 'neon') {
+    const tunnel = createStageTunnel(builder); environment.group.add(tunnel.group);
+    const dispose = environment.disposeExtraResources;
+    environment.disposeExtraResources = () => { dispose?.(); tunnel.dispose(); };
+    environment.group.updateMatrixWorld(true);
+  }
+  return environment;
 }

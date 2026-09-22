@@ -48,7 +48,7 @@ export function solarLandmarkSites(spline: TrackSpline, occupied: readonly { x: 
 }
 
 /** Authored Solar-only civic infrastructure, batched by geometry/material per district. */
-export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: ReturnType<typeof createSolarVegetation>) {
+export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: ReturnType<typeof createSolarVegetation>, circuitName = 'Kairo Solar') {
   const group = new THREE.Group(); group.name = 'solar-landmarks'; group.userData.sceneryContainer = true;
   const textures: THREE.Texture[] = [];
   const stone = new THREE.MeshStandardMaterial({ color: 0xded9c5, roughness: .88 });
@@ -218,7 +218,7 @@ export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: Ret
     // One legible roadside nameplate identifies the district at racing speed.
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
     const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#203e36'; ctx.fillRect(0, 0, 1024, 256);
-    ctx.fillStyle = '#c1d999'; ctx.font = '500 31px Arial'; ctx.fillText('K A I R O   S O L A R   /   C O M M O N S', 42, 55);
+    ctx.fillStyle = '#c1d999'; ctx.font = '500 31px Arial'; ctx.fillText(`${circuitName.toUpperCase()}  /  COMMONS`, 42, 55);
     ctx.fillStyle = '#faf1d8'; ctx.font = 'bold 76px Arial'; ctx.fillText(site.title, 40, 154, 945);
     ctx.fillStyle = '#c1d999'; ctx.font = '28px Arial'; ctx.fillText(site.kind === 'grove' ? 'SUNLIGHT TO SHARED ENERGY' : site.kind === 'glasshouse' ? 'SEEDS · WATER · LIFE' : 'GROWN HERE. SHARED HERE.', 42, 216);
     const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 8; textures.push(map);

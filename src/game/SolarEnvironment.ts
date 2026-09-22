@@ -12,7 +12,7 @@ import { createSolarFacades } from './SolarFacades';
 import { createSolarSkyLife } from './SolarSkyLife';
 
 /**
- * Kairo Solar: the Kairo Loop layout by day, rebuilt as a solarpunk garden
+ * The selected road layout by day, rebuilt as a solarpunk garden
  * city. Glazed buildings and rounded plaster ledges step back into planted terraces
  * hung with vines, every roof carries a solar array, flower beds and hedges
  * run the whole loop behind the walls, glass towers wear green balconies,
@@ -85,7 +85,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     c.fillStyle = '#242d2a'; c.fillRect(0, 0, 128, 384);
     leaf(c, 34, 22, 60, '#b7d580');
     c.save(); c.translate(64, 120); c.rotate(Math.PI / 2);
-    c.fillStyle = '#f2f7ee'; c.font = '700 40px Titillium Web, Arial, sans-serif'; c.textBaseline = 'middle'; c.fillText('KAIRO SOLAR', 0, 0);
+    c.fillStyle = '#f2f7ee'; c.font = '700 40px Titillium Web, Arial, sans-serif'; c.textBaseline = 'middle'; c.fillText(spline.circuit.shortName.toUpperCase(), 0, 0);
     c.restore();
   }
   const flagMap = texture(flagCanvas); textures.push(flagMap);
@@ -242,7 +242,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
 
   // Civic districts get deliberate sightlines before the repeating street fronts.
   const landmarkSites = solarLandmarkSites(spline, occupied);
-  const landmarks = createSolarLandmarks(landmarkSites, vegetation); group.add(landmarks.group);
+  const landmarks = createSolarLandmarks(landmarkSites, vegetation, spline.circuit.shortName); group.add(landmarks.group);
   occupied.push(...landmarkSites.map(site => ({ x: site.x, z: site.z, r: site.r + 12 })));
   const skyLife = createSolarSkyLife(spline, occupied); group.add(skyLife.group);
   occupied.push(...skyLife.sites);
@@ -309,7 +309,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const p = s.position.clone().addScaledVector(s.right, side * (15.5 + rand() * .6)).addScaledVector(s.tangent, (rand() - .5) * 2);
       if (builder.distanceToTrack(p.x, p.z) < 15.1 || grandstands.some(stand => stand.contains(p.x,p.z,3))) continue;
       if (landmarkViewReserved(p.x, p.z, 3)) continue;
-      const ground = lift > .3 ? p.y - lift : p.y;
+      const ground = spline.circuit.layout === 'neon' ? 0 : lift > .3 ? p.y - lift : p.y;
       tree(p.x, ground, p.z, lift > .3 ? .7 : 1.4 + rand() * .5);
     }
   }
@@ -327,7 +327,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   // Hedges along the flyover pavements so the crossing reads as a garden bridge.
   for (let i = 0; i < spline.count; i += 3) {
     const p = i / spline.count;
-    if (liftAt(p) < .6) continue;
+    if (spline.circuit.layout !== 'kairo' || liftAt(p) < .6) continue;
     const s = spline.sampleAt(i), angle = Math.atan2(s.tangent.x, s.tangent.z);
     for (const side of [-1, 1]) {
       const h = s.position.clone().addScaledVector(s.right, side * 17.1);
