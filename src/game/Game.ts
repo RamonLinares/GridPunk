@@ -1,6 +1,8 @@
+import { solarRoadSurface } from './SolarSurfaces';
+import { applySolarLivery } from '../entities/SolarLivery';
 import { NEON_TUNNEL, neonRainExposure } from './track/NeonProfile';
 import { createKairoCityBridge } from './KairoCityBridge';
-import { selectedCircuit } from './track/circuits';
+import { selectedCircuit, isKairoLayout } from './track/circuits';
 import * as THREE from 'three';
 import { disposeObject3D } from '../utils/dispose';
 import { InputController } from '../core/InputController';
@@ -163,8 +165,19 @@ export class Game {
         this.materials = createMaterials();
         await yieldToBrowser();
         this.spline = new TrackSpline(selectedCircuit());
-        {
-            this.renderer.toneMapping = THREE.AgXToneMapping;
+        this.renderer.toneMapping = this.spline.circuitId === 'solar' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
+        if (this.spline.circuitId === 'solar') {
+            // Dry daylight tarmac, grass verges and pale concrete walls.
+            this.materials.asphalt.color.setHex(0xb1b1aa);
+            this.materials.asphalt.roughness = .86;
+            this.materials.asphalt.metalness = 0;
+            solarRoadSurface(this.materials.asphalt);
+            this.materials.runoffAsphalt.color.setHex(0x6f9b4c);
+            this.materials.runoffAsphalt.roughness = .95;
+            this.materials.barrier.color.setHex(0xd9d3c4);
+            this.materials.concrete.color.setHex(0xd8d4c8);
+        }
+        else {
             this.materials.asphalt.color.setHex(0x8196a4);
             this.materials.asphalt.roughness = .48;
             this.materials.asphalt.metalness = .10;
@@ -173,7 +186,7 @@ export class Game {
         }
         this.builder = new TrackBuilder(this.spline, this.materials);
         this.scene.add(this.builder.group);
-        if (this.spline.circuitId === 'kairo') this.scene.add(createKairoCityBridge(this.builder, this.materials));
+        if (isKairoLayout(this.spline.circuitId)) this.scene.add(createKairoCityBridge(this.builder, this.materials));
         await yieldToBrowser();
         this.environment = createEnvironment(this.scene, this.builder, this.camera);
         await this.environment.ready;
@@ -190,6 +203,7 @@ export class Game {
             await Promise.all([preloadNeonCarModel(), preloadShinseiCarModel()]);
         }
         this.car = new Car(this.builder, {}, neonVehicle);
+        if (this.spline.circuitId === 'solar') applySolarLivery(this.car.group);
         // Human steering ergonomics (speed-weighted lock and time-to-lock). The
         // rivals' controller is tuned in raw wheel angle and keeps the default.
         this.car.physics.setDriverSteering(true);
@@ -263,6 +277,10 @@ export class Game {
         const probe = this.environment.createSkyProbeScene();
         this.environmentMap = pmrem.fromScene(probe, 0, 0.1, 100);
         this.scene.environment = this.environmentMap.texture;
+        // A daytime sky probe is bright enough to light every surface on its own,
+        // flattening the sun shading and hiding the cascade shadows. Keep it for
+        // reflections only on the solar circuit; the night probe stays as is.
+        this.scene.environmentIntensity = this.spline.circuitId === 'solar' ? .65 : 1;
         probe.traverse(object => { (object as THREE.Mesh).geometry?.dispose(); });
         pmrem.dispose();
         await yieldToBrowser();
@@ -509,6 +527,7 @@ export class Game {
      * a thin black one and leaves the rest to the atmosphere pass.
      */
     private sceneFog(): THREE.FogExp2 {
+        if (this.spline.circuitId === 'solar') return new THREE.FogExp2(0xc3d8e6, .00036);
         return this.quality === 4 ? new THREE.FogExp2(0x000000, .0009) : new THREE.FogExp2(0x1c3848, .0022);
     }
     /** Auto mode steps both ways with separate thresholds and sustained windows. */
@@ -601,6 +620,15 @@ export class Game {
         if (this.replay)
             return;
         this.resetCar();
+        // Preserve the development location when entering a visual-review session.
+        if (this.devMode && Number.isFinite(this.startAt)) {
+            const index = Math.round((((this.startAt % 1) + 1) % 1) * this.spline.count);
+            this.car.resetAt(index, 0);
+            this.progressCache.index = index;
+            this.playerPrev = this.spline.progressAt(this.car.physics.position, { index });
+            this.guide?.reset(index);
+            this.cameraRig.snap(this.car);
+        }
         this.setPaused(false);
     }
     restartSession(): void { this.beginSession(); }
@@ -1187,6 +1215,7 @@ export class Game {
             } }));
     }
     private rainExposureAt(progressMetres: number): number {
+        if (this.spline.circuitId === 'solar') return 0;
         return this.spline.circuitId === 'neon' ? neonRainExposure(progressMetres / this.spline.length, this.spline.length) : 1;
     }
     private tunnelMixAt(progressMetres: number): number {

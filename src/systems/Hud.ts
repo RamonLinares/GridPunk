@@ -50,7 +50,7 @@ export class Hud {
     constructor(private readonly spline: TrackSpline) {
         this.root.id = 'hud-root';
         this.root.innerHTML = `
-      <div class="race-identity"><span class="circuit-mark" aria-hidden="true">///</span><div><b>${spline.circuit.shortName.toUpperCase()}</b><span>${spline.circuit.shortName.toUpperCase()} · SPRINT</span></div></div>
+      <div class="race-identity"><span class="circuit-mark" aria-hidden="true">${spline.circuitId === 'solar' ? '◢' : '///'}</span><div><b>${spline.circuit.shortName.toUpperCase()}</b><span>${spline.circuitId === 'solar' ? 'CLEAN ENERGY. A BRIGHTER TOMORROW.' : spline.circuit.shortName.toUpperCase() + ' · SPRINT'}</span></div></div>
       <div class="race-standing"><div class="position-readout"><span class="hud-label">POSITION</span><strong><b id="hud-position">1</b><small>/ 6</small></strong><span id="hud-gap" class="rival-gap"></span></div><div class="lap-readout"><span class="hud-label">LAP</span><strong><b id="hud-lap">1</b><small>/ 3</small></strong></div></div>
       <div class="timing-tower"><div class="live-time"><span class="hud-label"><i></i><span id="hud-time-label" role="status">LAP TIME</span></span><strong id="hud-time">0:00.000</strong></div><div class="timing-row"><span>PERSONAL BEST</span><b id="hud-best">--:--.---</b></div><div class="timing-row"><span id="hud-last-label">LAST LAP</span><b id="hud-last">--:--.---</b></div><div class="sector-row"><span id="hud-sector-0">S1</span><span id="hud-sector-1">S2</span><span id="hud-sector-2">S3</span></div></div>
       <div class="start-lights" id="hud-start-lights" aria-label="Starting lights" aria-hidden="true">${Array.from({ length: 5 }, () => '<i></i>').join('')}</div>

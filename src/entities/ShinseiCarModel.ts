@@ -18,11 +18,14 @@ export function createShinseiCarModel(): CarModel {
   group.name = 'car';
   group.userData.design = 'neon-shinsei-nd01';
   group.userData.cockpitEye = [0, .87, .03];
-  // Source presentation details sit almost against the driver's lens. The
+  // The source wiper rods protrude through the canopy in exterior views.
+  // Remove them from this instance so camera changes and replays cannot restore them.
+  group.getObjectByName('Shinsei_wipers')?.removeFromParent();
+  // The source dashboard detail sits almost against the driver's lens. The
   // placeholder dashboard emitter enters the wider speed FOV and floods the
   // cockpit with bloom; our functional wheel already supplies the instruments.
-  // Retain both details for exterior views only.
-  group.userData.cockpitHidden = ['Shinsei_wipers', 'Shinsei_interior_led_cyan']
+  // Retain the dashboard emitter for exterior views only.
+  group.userData.cockpitHidden = ['Shinsei_interior_led_cyan']
     .map(name => group.getObjectByName(name)).filter(Boolean);
   const materialCopies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   const brakeLights: THREE.Mesh[] = [];

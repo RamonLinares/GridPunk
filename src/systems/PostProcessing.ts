@@ -55,7 +55,7 @@ const gradeShader = {
     uEye: {value: new THREE.Vector3()},
     uMotion: {value: 0},
     uExtreme: {value: 0}, tVelocity: {value: null}, uJitterDelta: {value: new THREE.Vector2()},
-    uLook: {value: 0}, uDof: {value: 0}, uFocus: {value: 30}, uBokeh: {value: 12},
+    uLook: {value: 0}, uDof: {value: 0}, uFocus: {value: 30}, uBokeh: {value: 12}, uDaylight: {value: 0},
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -77,7 +77,7 @@ const gradeShader = {
     uniform mat4 uInverseViewProjection,uPreviousViewProjection;
     uniform vec3 uEye;
     uniform float uMotion,uExtreme;uniform sampler2D tVelocity;uniform vec2 uJitterDelta;
-    uniform float uLook,uDof,uFocus,uBokeh;
+    uniform float uLook,uDof,uFocus,uBokeh,uDaylight;
     #include <packing>
     varying vec2 vUv;
 
@@ -168,6 +168,13 @@ const gradeShader = {
         float y=max(dot(color,vec3(.2126,.7152,.0722)),.0001);
         color*=clamp(pow(y/.18,c-1.),.05,1.35);
         color+=(grain-.5)*.002;
+      }else if(uDaylight>.5){
+      // Daylight grade: a little more colour and contrast about mid grey,
+      // warm highlights; no cool shadow cast.
+      color = max(saturate(color, 1.15), vec3(0.0));
+      color = max(color * 1.06 + vec3(.003, .004, .004), vec3(0.0));
+      color *= vec3(1.03, 1.0, 0.96);
+      color += (grain - 0.5) * 0.002;
       }else{
       // Filmic grade: gentle S-contrast, saturation lift and cool shadows.
       color = saturate(color, 1.02);
@@ -232,6 +239,7 @@ export class PostProcessing {
   private speed = 0;
   private damage = 0;
   private readonly neon: boolean;
+  private readonly daylight: boolean;
   private readonly atmosphere?: NeonAtmospherePass;
   private readonly frameDepth?: NeonFrameDepthPass;
   private readonly previousViewProjection = new THREE.Matrix4();
@@ -257,6 +265,7 @@ export class PostProcessing {
     camera: THREE.PerspectiveCamera,
   ) {
     this.neon = scene.userData.neon === true;
+    this.daylight = scene.userData.daylight === true;
     this.rendererRef = renderer;
     this.mainCamera = camera;
     this.composer = new EffectComposer(renderer);
@@ -297,11 +306,12 @@ export class PostProcessing {
       this.composer.addPass(this.atmosphere);
     }
 
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), this.neon ? .83 : .12, this.neon ? .48 : .35, this.neon ? .85 : 1.25);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), this.neon ? .83 : this.daylight ? .07 : .12, this.neon ? .48 : this.daylight ? .5 : .35, this.neon ? .85 : this.daylight ? 1.6 : 1.25);
     this.composer.addPass(this.bloom);
 
     this.grade = new ShaderPass(gradeShader);
     this.grade.uniforms.uNeon.value = this.neon ? 1 : 0;
+    this.grade.uniforms.uDaylight.value = this.daylight ? 1 : 0;
     if(this.frameDepth) this.grade.uniforms.tFrameDepth.value = this.frameDepth.target.texture;
     this.grade.uniforms.uAberration.value = this.neon ? .0009 : .0001;
     this.composer.addPass(this.grade);
@@ -393,7 +403,7 @@ export class PostProcessing {
       this.composer.removePass(this.anamorphic);this.anamorphic.dispose();this.anamorphic=undefined;
     }
     // Bloom threshold scaled like the anamorphic one: .94 in the reference's hot HDR range.
-    this.bloom.strength=look?.51:.83;this.bloom.threshold=look?.7:this.neon?.85:1.25;
+    this.bloom.strength=look?.51:.83;this.bloom.threshold=look?.7:this.neon?.85:this.daylight?.95:1.25;
     this.grade.uniforms.uLook.value=look?1:0;
     this.grade.uniforms.uDof.value=look&&this.cinematic?1:0;
     if(this.tape)this.tape.uniforms.uCinematic.value=look?1:0;
@@ -450,7 +460,7 @@ export class PostProcessing {
     uniforms.uTime.value = this.time;
     uniforms.uSpeed.value = this.speed;
     uniforms.uDamage.value = this.damage;
-    this.bloom.strength = this.look ? .51 : this.neon ? .83 : 0.04 + this.speed * 0.03;
+    this.bloom.strength = this.look ? .51 : this.neon ? .83 : this.daylight ? .07 : 0.04 + this.speed * 0.03;
   }
 
   /** Prepare every world material against the target used by the real race. */

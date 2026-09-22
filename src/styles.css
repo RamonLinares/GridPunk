@@ -2247,3 +2247,34 @@ body.replay-active #hud-root,body.replay-active #session-toolbar,body.replay-act
  .replay-controls{padding:8px 14px 10px;} #replay-panel button,#replay-panel select,#replay-download{font-size:9px;padding:8px;}
  .replay-export-row{gap:6px;margin-top:6px;} .replay-transport{gap:8px;} #replay-export-status{font-size:10px;}
 }
+
+/* The garden circuit uses the same functional HUD with its own solar identity. */
+.solar-race { --accent:#bbdf94; --mint:#c4edae; }
+.solar-race .race-identity .circuit-mark {
+  display:block; width:36px; height:44px; margin-right:13px; font-size:0;
+  background:#b6e399; border-radius:90% 0 90% 0; transform:rotate(12deg);
+  position:relative;
+}
+.solar-race .race-identity .circuit-mark::after {
+  content:""; position:absolute; height:51px; width:3px; background:#263f2f;
+  transform:rotate(38deg); left:17px; top:-3px;
+}
+.solar-race .race-identity b { font-size:24px; letter-spacing:.09em; }
+.solar-race .race-identity div>span { font-size:9px; letter-spacing:.12em; }
+.solar-race .live-time { color:#f4df88; }
+.solar-race .live-time .hud-label { color:#f4df88; }
+.solar-race .live-time i { background:#f4df88; }
+.solar-race .timing-tower::after { display:none; }
+.solar-race .hud-telemetry::after { background:linear-gradient(90deg,transparent,#bbdf94); }
+.solar-race .race-standing::after { background:linear-gradient(90deg,#e16c56,transparent); }
+@media (min-width:1101px) {
+  .solar-race .race-standing { top:106px; }
+  .solar-race .timing-tower { width:300px; }
+  .solar-race .live-time strong { font-size:38px; }
+}
+@media (max-width:700px) {
+  .solar-race .race-identity b { font-size:14px; }
+  .solar-race .race-identity div>span { font-size:6px; letter-spacing:.07em; }
+  .solar-race .race-identity .circuit-mark { width:23px; height:29px; margin-right:8px; }
+  .solar-race .race-identity .circuit-mark::after { height:34px; left:11px; width:2px; }
+}

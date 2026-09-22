@@ -1,6 +1,6 @@
 # GridPunk
 
-A cyberpunk racing game set in **Neon District**. Three laps, six cars, and two rain-soaked street circuits: Neon District (3.744 km) and Kairo Loop (5.807 km).
+A cyberpunk racing game set in **Neon District**. Three laps, six cars, two rain-soaked night circuits, Neon District (3.744 km) and Kairo Loop (5.807 km), and Kairo Solar, the same loop by day in a solarpunk garden city.
 
 [Play GridPunk](https://gridpunk.smallweblab.com/) · [GitHub repository](https://github.com/RamonLinares/GridPunk)
 
@@ -13,6 +13,7 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, and two 
 ## What's included
 
 - Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover and a giant animated Ferris wheel with pink rim lights, ramen and bonsai holograms, and a Mars video billboard. Open directly with `?circuit=kairo`.
+- Kairo Solar: the Kairo layout in daylight. Terraced blocks draped in vines and living walls, rooftop solar arrays, hedges, flower beds and big street trees along the whole loop, grandstands, glass garden towers, solar farms, wind turbines against mountains and a bay, cumulus skies and cascaded sun shadows. Open directly with `?circuit=solar`.
 - Shinsei ND-01 and Kurogane K89-R, with a mixed grid of five AI rivals.
 - Neon city, skyways, elevated/banked road sections, tunnel, wet surfaces, animated signs, flying traffic and video holograms.
 - Rain, engine and spatial hologram audio.

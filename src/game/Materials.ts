@@ -121,7 +121,10 @@ export function createMaterials(): MaterialLibrary {
   const asphalt = pbr(asphaltTex, { color: 0xf0f0f0, roughness: 0.86, metalness: 0.0, envMapIntensity: 0.22, normalScale: new THREE.Vector2(0.12, 0.12), polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
 
   const runoffTex = asphaltTex;
-  const runoffAsphalt = pbr(runoffTex, { color: 0x8a8d90, roughness: 0.9, metalness: 0.0, normalScale: new THREE.Vector2(0.1, 0.1), polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  // The shoulder/apron already have separate geometric heights. A positive
+  // depth bias pushes the distant apron behind the flyover deck below it,
+  // making the verge appear to grow towards the camera while driving.
+  const runoffAsphalt = pbr(runoffTex, { color: 0x8a8d90, roughness: 0.9, metalness: 0.0, normalScale: new THREE.Vector2(0.1, 0.1) });
 
   const kerb = pbr(createKerbTextures(256), { roughness: 0.86, metalness: 0.0, side: THREE.DoubleSide, normalScale: new THREE.Vector2(0.16, 0.16), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 

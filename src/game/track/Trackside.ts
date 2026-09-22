@@ -36,7 +36,12 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
     const n = builder.spline.count;
     const MIN = 8.4; // keep props off the racing surface
     // ---------------- Advertising banners on the barriers ----------------
-    const bannerTexts: [string, string, string, string][] = [
+    // Kairo Solar prints its sponsors on fabric; the night circuits run LED boards.
+    const daylight = builder.spline.circuitId === 'solar';
+    const bannerTexts: [string, string, string, string][] = daylight ? [
+        [builder.spline.circuit.shortName.toUpperCase(), '#28332e', '#f3f7ef', 'RACING FOR A BRIGHTER TOMORROW'],
+        ['GRIDLINK', '#303a34', '#c6df8b', 'CLEAN ENERGY. HIGHER PERFORMANCE.'],
+    ] : [
         [builder.spline.circuit.shortName.toUpperCase(), '#10152b', '#63f8ff', 'RACE THE NIGHT'],
         ['GRIDPUNK', '#20132e', '#ff92cd', 'AFTER DARK'],
     ];
@@ -145,14 +150,14 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
         }
     }
     group.userData.advertisingPanels = panels;
-    boardDesigns.forEach(([text,, fg, sub], ti) => {
+    boardDesigns.forEach(([text, bg, fg, sub], ti) => {
         if (!parts[ti].length)
             return;
         const geometry = mergeGeometries(parts[ti], false);
         parts[ti].forEach(part => part.dispose());
         if (!geometry)
             return;
-        const material = createNeonRaceBoard(text, sub, fg, ti >= bannerTexts.length);
+        const material = daylight ? printedBanner(text, sub, bg, fg, ti >= bannerTexts.length) : createNeonRaceBoard(text, sub, fg, ti >= bannerTexts.length);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `barrier-advertising-${ti}`;
         group.add(mesh);
@@ -165,8 +170,8 @@ export function createTrackside(builder: TrackBuilder, materials: MaterialLibrar
     if (housings.length) {
         const geometry = mergeGeometries(housings, false)!;
         housings.forEach(g => g.dispose());
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x121c24, roughness: .72, metalness: .45 }));
-        mesh.name = 'neon-barrier-led-cabinets';
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: daylight ? 0xdde3dc : 0x121c24, roughness: .72, metalness: daylight ? .1 : .45 }));
+        mesh.name = daylight ? 'solar-barrier-banner-frames' : 'neon-barrier-led-cabinets';
         group.add(mesh);
     }
     // ---------------- Corner number boards ----------------
@@ -246,4 +251,39 @@ function brakeTexture(text: string): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+/** Printed fabric sponsor banner with a leaf mark; matte, never emissive. */
+function printedBanner(title: string, subtitle: string, background: string, ink: string, compact: boolean): THREE.MeshStandardMaterial {
+  const canvas = document.createElement('canvas');
+  canvas.width = compact ? 512 : 1280;
+  canvas.height = 80;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${compact ? 40 : 46}px Titillium Web, Arial, sans-serif`;
+  ctx.fillText(title, canvas.width / 2 + 10, compact ? 40 : 30);
+  if (!compact) {
+    ctx.font = '700 17px Titillium Web, Arial, sans-serif';
+    ctx.fillText(subtitle, canvas.width / 2 + 10, 62);
+  }
+  const size = compact ? 44 : 50, x = canvas.width / 2 - ctx.measureText(title).width / 2 - (compact ? 60 : 110), y = (canvas.height - size) / 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y + size);
+  ctx.quadraticCurveTo(x, y, x + size, y);
+  ctx.quadraticCurveTo(x + size, y + size, x, y + size);
+  ctx.fill();
+  ctx.strokeStyle = background;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x + size * .12, y + size * .88);
+  ctx.lineTo(x + size * .7, y + size * .3);
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({ map: texture, roughness: .8, metalness: 0 });
 }

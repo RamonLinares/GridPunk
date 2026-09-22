@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-for (const circuit of ['neon', 'kairo'] as const) test(`${circuit} loads, drives, pauses, restarts and changes cars`, async ({ page, isMobile }, info) => {
+const TITLES = { neon: 'Neon District', kairo: 'Kairo Loop', solar: 'Kairo Solar' } as const;
+for (const circuit of ['neon', 'kairo', 'solar'] as const) test(`${circuit} loads, drives, pauses, restarts and changes cars`, async ({ page, isMobile }, info) => {
   const errors: string[] = [], missing: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -16,9 +17,9 @@ for (const circuit of ['neon', 'kairo'] as const) test(`${circuit} loads, drives
     localStorage.setItem(`gridpunk:${circuit}-sprint-best-v1:${legacy}`, '90');
   }, { circuit, legacy: isMobile ? 'normal' : 'hard' });
   // Unknown legacy links fall back to Neon; Kairo is selected explicitly.
-  await page.goto(circuit === 'kairo' ? '/?circuit=kairo' : isMobile ? '/?circuit=monaco' : '/');
+  await page.goto(circuit !== 'neon' ? `/?circuit=${circuit}` : isMobile ? '/?circuit=monaco' : '/');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__ && document.querySelector<HTMLElement>('#loading')?.hidden);
-  await expect(page).toHaveTitle(circuit === 'neon' ? 'GridPunk — Neon District' : 'GridPunk — Kairo Loop');
+  await expect(page).toHaveTitle(`GridPunk — ${TITLES[circuit]}`);
   await expect(page.locator('#home, [data-pick]')).toHaveCount(0);
   await expect(page.locator('#session-primary')).toBeEnabled();
   expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__!.circuit)).toBe(circuit);

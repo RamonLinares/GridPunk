@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createNeonEnvironment } from './NeonEnvironment';
+import { createSolarEnvironment } from './SolarEnvironment';
 import type { TrackBuilder } from './track/TrackBuilder';
 import type { PylonEntry } from './ScoringPylon';
 import type { SunLighting } from '../systems/SunLighting';
@@ -29,5 +30,5 @@ export interface EnvironmentHandles {
 }
 
 export function createEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
-  return createNeonEnvironment(scene, builder, camera);
+  return builder.spline.circuitId === 'solar' ? createSolarEnvironment(scene, builder, camera) : createNeonEnvironment(scene, builder, camera);
 }

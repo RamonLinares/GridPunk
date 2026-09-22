@@ -2,7 +2,7 @@ import { neonBankAt, neonRoadLiftAt } from './NeonProfile';
 import { KAIRO_POINTS, KAIRO_CORNERS, kairoRoadLiftAt } from './kairoData';
 import { NEON_POINTS } from './neonData';
 
-export type CircuitId = 'neon' | 'kairo';
+export type CircuitId = 'neon' | 'kairo' | 'solar';
 export interface CircuitDefinition {
   id: CircuitId;
   name: string;
@@ -34,8 +34,19 @@ export const CIRCUITS: Record<CircuitId, CircuitDefinition> = {
     sectorFractions: [.37609781298432926, .8110900637162046], points: KAIRO_POINTS,
     surfaceLiftAt: kairoRoadLiftAt, gradeSeparated: true, cornerMarkers: KAIRO_CORNERS,
   },
+  // The Kairo layout by day: same centreline, flyover and corners, rebuilt as
+  // a solarpunk garden city with a clear afternoon sky.
+  solar: {
+    id: 'solar', name: 'Kairo Solar', location: 'GridPunk City · Daylight', shortName: 'Kairo Solar',
+    mapCode: 'GP / SOL', lengthLabel: '5.807', cornerCount: 18, coordinates: 'FIGURE-EIGHT GARDEN CIRCUIT',
+    sectorFractions: [.37609781298432926, .8110900637162046], points: KAIRO_POINTS,
+    surfaceLiftAt: kairoRoadLiftAt, gradeSeparated: true, cornerMarkers: KAIRO_CORNERS,
+  },
 };
+/** Circuits whose road is the Kairo figure-eight, including its flyover deck. */
+export const isKairoLayout = (id: CircuitId): boolean => id === 'kairo' || id === 'solar';
 /** Unknown and legacy circuit links still fall back to Neon District. */
 export function selectedCircuit(search = window.location.search): CircuitDefinition {
-  return new URLSearchParams(search).get('circuit') === 'kairo' ? CIRCUITS.kairo : CIRCUITS.neon;
+  const id = new URLSearchParams(search).get('circuit');
+  return id === 'kairo' ? CIRCUITS.kairo : id === 'solar' ? CIRCUITS.solar : CIRCUITS.neon;
 }

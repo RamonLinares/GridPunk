@@ -34,10 +34,12 @@ document.title = `GridPunk — ${circuit.shortName}`;
 canvas.setAttribute('aria-label', `${circuit.name} driving game`);
 document.querySelector('.session-eyebrow')!.innerHTML = '<span class="circuit-mark">///</span> GRIDPUNK';
 document.querySelector('#circuit-corners')!.textContent = String(circuit.cornerCount);
-document.querySelector('.session-location')!.innerHTML = `<span>${circuit.lengthLabel} KM · NIGHT STREET RACE</span>`;
+const daylight = circuit.id === 'solar';
+document.body.classList.toggle('solar-race', daylight);
+document.querySelector('.session-location')!.innerHTML = `<span>${circuit.lengthLabel} KM · ${daylight ? 'DAY' : 'NIGHT'} STREET RACE</span>`;
 {
     document.body.classList.add('neon-race');
-    document.querySelector('.session-specs > div:last-child b')!.textContent = 'RAIN';
+    document.querySelector('.session-specs > div:last-child b')!.textContent = daylight ? 'SUN' : 'RAIN';
     title.textContent = circuit.shortName;
     document.querySelector('.session-home')!.textContent = circuit.shortName.toUpperCase();
     document.querySelector('.loading-log > span')!.textContent = `> ${circuit.shortName.toUpperCase()}  ${circuit.lengthLabel} KM`;
