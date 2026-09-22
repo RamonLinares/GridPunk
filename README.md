@@ -14,6 +14,7 @@ A cyberpunk racing game set in **Neon District**. Three laps, six cars, two rain
 
 - Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover and a giant animated Ferris wheel with pink rim lights, ramen and bonsai holograms, and a Mars video billboard. Open directly with `?circuit=kairo`.
 - Kairo Solar: the Kairo layout in daylight. Terraced blocks draped in vines and living walls, rooftop solar arrays, hedges, flower beds and big street trees along the whole loop, grandstands, glass garden towers, solar farms, wind turbines against mountains and a bay, cumulus skies and cascaded sun shadows. Open directly with `?circuit=solar`.
+- Solar landmarks: Helios Grove's branching solar collectors, The Glasshouse's botanical conservatory, and Harvest Commons' vertical farm and market, with rainwater tanks, growing beds and public plazas.
 - Shinsei ND-01 and Kurogane K89-R, with a mixed grid of five AI rivals.
 - Neon city, skyways, elevated/banked road sections, tunnel, wet surfaces, animated signs, flying traffic and video holograms.
 - Rain, engine and spatial hologram audio.

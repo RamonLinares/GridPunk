@@ -7,6 +7,9 @@ import { SunLighting } from '../systems/SunLighting';
 import { updateNeonLedSigns } from './NeonLedSigns';
 import { createSolarVegetation } from './SolarVegetation';
 import { createSolarBay } from './SolarSurfaces';
+import { createSolarLandmarks, solarLandmarkSites } from './SolarLandmarks';
+import { createSolarFacades } from './SolarFacades';
+import { createSolarSkyLife } from './SolarSkyLife';
 
 /**
  * Kairo Solar: the Kairo Loop layout by day, rebuilt as a solarpunk garden
@@ -29,6 +32,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   // --- Materials: sun-bleached walls, living roofs, glass and silicon. ---
   const plaster = new THREE.MeshStandardMaterial({ color: 0xf3eee2, roughness: .88 });
   const plasterWarm = new THREE.MeshStandardMaterial({ color: 0xe9d9bd, roughness: .88 });
+  const facades = createSolarFacades();
   // Stronger sky reflections distinguish glazing from the matte terrace slabs.
   const glass = new THREE.MeshStandardMaterial({ color: 0x9ccbe0, roughness: .12, metalness: .55, envMapIntensity: 3.2 });
   const glazingCanvas = document.createElement('canvas'); glazingCanvas.width = 512; glazingCanvas.height = 256;
@@ -102,6 +106,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   const occupied: { x: number; z: number; r: number }[] = [];
   const addBuilding = (x: number, z: number, w: number, d: number, h: number, angle: number, near: boolean) => {
     const radius = Math.hypot(w, d) / 2;
+    if (landmarkViewReserved(x, z, radius)) return;
     if (occupied.some(p => Math.hypot(x - p.x, z - p.z) < radius + p.r + 2)) return;
     const co = Math.cos(angle), si = Math.sin(angle);
     if (builder.distanceToTrack(x, z) < radius + 16) {
@@ -111,6 +116,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     }
     occupied.push({ x, z, r: radius });
     const wall = walls[Math.floor(rand() * walls.length)];
+    const windowedWall = wall === plasterWarm ? facades.warm : facades.cool;
     const detailed = near || builder.distanceToTrack(x, z) < 110;
     const world = (u: number, v: number) => new THREE.Vector3(x + co * u + si * v, 0, z - si * u + co * v);
     const local = (material: THREE.Material, u: number, y: number, v: number, sw: number, sh: number, sd: number, tilt = 0) =>
@@ -125,9 +131,17 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (h > podium + 6) tiers.push({ u: -w * .1, v: -d * .1, w: w * .72, d: d * .72, bottom: podium, h: h - podium });
     if (h > podium + 22) tiers.push({ u: -w * .16, v: -d * .16, w: w * .48, d: d * .48, bottom: h - 8, h: 8 });
     for (const [index, t] of tiers.entries()) {
-      local(detailed ? glass : wall, t.u, t.bottom + t.h / 2, t.v, t.w, t.h, t.d);
+      local(detailed ? glass : windowedWall, t.u, t.bottom + t.h / 2, t.v, t.w, t.h, t.d);
       // Tall plaster service cores break the glazing, as in planted Mediterranean towers.
-      if (detailed) local(wall, t.u - t.w * .29, t.bottom + t.h / 2, t.v + .12, t.w * .26, t.h, t.d + .35);
+      if (detailed) local(windowedWall, t.u - t.w * .29, t.bottom + t.h / 2, t.v + .12, t.w * .26, t.h, t.d + .35);
+      else {
+        // The distant building kit still has real floor ledges and corner piers.
+        // Its shared window atlas supplies four-sided detail without thousands of meshes.
+        for (let y = t.bottom + 3.6; y < t.bottom + t.h; y += 3.6)
+          local(concrete, t.u, y, t.v, t.w + .35, .18, t.d + .35);
+        for (const u of [-1, 1]) for (const v of [-1, 1])
+          local(wall, t.u + u * (t.w / 2 - .12), t.bottom + t.h / 2, t.v + v * (t.d / 2 - .12), .35, t.h, .35);
+      }
       // Living roof and hedges along the front and back parapets.
       local(concrete, t.u, t.bottom + t.h + .12, t.v, t.w + .5, .24, t.d + .5);
       local(hedge, t.u, t.bottom + t.h + .85, t.v + t.d / 2 - .3, t.w * .92, .8, .8);
@@ -185,6 +199,8 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       mesh.name = 'solar-facade-slogan';
       const p = world(-w * .29, d / 2 + .32);
       mesh.position.set(p.x, Math.min(podium - 1, 8) + 2, p.z); mesh.rotation.y = angle;
+      // Keep each printed slogan on its own solid panel over the windowed core.
+      local(wall, -w * .29, mesh.position.y, d / 2 + .306, 5.4, 10.6, .018);
       group.add(mesh);
     }
     if (near) {
@@ -195,12 +211,13 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   };
   // Glass garden towers: green balconies every floor and a planted crown.
   const addTower = (x: number, z: number, w: number, h: number) => {
+    if (landmarkViewReserved(x, z, w)) return;
     if (builder.distanceToTrack(x, z) < w + 60) return;
     if (occupied.some(p => Math.hypot(x - p.x, z - p.z) < w + p.r + 4)) return;
     occupied.push({ x, z, r: w * .75 });
     const angle = rand() * Math.PI;
     block(glass, x, h / 2, z, w, h, w, angle);
-    block(white, x, h / 2, z, w * .34, h + .4, w * 1.02, angle);
+    block(facades.tower, x, h / 2, z, w * .34, h + .4, w * 1.02, angle);
     for (let y = 4; y < h; y += 4) {
       block(greenRoof, x, y, z, w + 1.4, .5, w + 1.4, angle);
       if (y % 12 === 0) block(vines[y % 3], x + Math.cos(angle) * (w / 2 + .8), y - 2.6, z - Math.sin(angle) * (w / 2 + .8), .3, 5, w * .5, angle);
@@ -222,6 +239,21 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (!stand) continue;
     grandstands.push(stand); occupied.push(stand.footprint); group.add(stand.group);
   }
+
+  // Civic districts get deliberate sightlines before the repeating street fronts.
+  const landmarkSites = solarLandmarkSites(spline, occupied);
+  const landmarks = createSolarLandmarks(landmarkSites, vegetation); group.add(landmarks.group);
+  occupied.push(...landmarkSites.map(site => ({ x: site.x, z: site.z, r: site.r + 12 })));
+  const skyLife = createSolarSkyLife(spline, occupied); group.add(skyLife.group);
+  occupied.push(...skyLife.sites);
+  const viewSites = [...landmarkSites, ...skyLife.sites];
+  const landmarkViewReserved = (x: number, z: number, radius: number) => viewSites.some(site => {
+    if (Math.hypot(x - site.x, z - site.z) < site.r + radius + 12) return true;
+    const approach = spline.sampleAt(Math.round((site.progress - .03) * spline.count)).position;
+    const dx = site.x - approach.x, dz = site.z - approach.z;
+    const t = THREE.MathUtils.clamp(((x - approach.x) * dx + (z - approach.z) * dz) / (dx * dx + dz * dz), 0, 1);
+    return Math.hypot(x - approach.x - t * dx, z - approach.z - t * dz) < radius + 12;
+  });
 
   // Street fronts along the whole loop, both sides, mid-rise.
   for (let i = 0; i < spline.count; i += 7) {
@@ -276,6 +308,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     for (const side of [-1, 1]) {
       const p = s.position.clone().addScaledVector(s.right, side * (15.5 + rand() * .6)).addScaledVector(s.tangent, (rand() - .5) * 2);
       if (builder.distanceToTrack(p.x, p.z) < 15.1 || grandstands.some(stand => stand.contains(p.x,p.z,3))) continue;
+      if (landmarkViewReserved(p.x, p.z, 3)) continue;
       const ground = lift > .3 ? p.y - lift : p.y;
       tree(p.x, ground, p.z, lift > .3 ? .7 : 1.4 + rand() * .5);
     }
@@ -306,6 +339,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   for (let k = 0; k < 1100; k++) {
     const x = (rand() - .5) * 1900, z = (rand() - .5) * 1900;
     if (builder.distanceToTrack(x, z) < 22) continue;
+    if (landmarkViewReserved(x, z, 3)) continue;
     if (occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + 3)) continue;
     tree(x, 0, z, .8 + rand() * .7);
   }
@@ -492,11 +526,12 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       updateNeonLedSigns(seconds);
       if (focus) sky.position.copy(focus);
       skyMat.uniforms.uTime.value = seconds;
+      skyLife.update(seconds);
       for (const t of turbines) (t.userData.rotor as THREE.Group).rotation.z = seconds * (t.userData.rotor as THREE.Group).userData.rate;
     },
     createSkyProbeScene() { const probe = new THREE.Scene(); probe.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), skyMat)); return probe; },
     updateShadows: () => sunLighting.update(), prepareShadowMaterials: root => sunLighting.prepareMaterials(root),
     setShadows: enabled => sunLighting.setShadows(enabled), setShadowMapSize: size => sunLighting.setShadowMapSize(size), updateStandings: () => {},
-    disposeExtraResources: () => { textures.forEach(t => t.dispose()); vegetation.dispose(); },
+    disposeExtraResources: () => { textures.forEach(t => t.dispose()); vegetation.dispose(); landmarks.dispose(); facades.dispose(); skyLife.dispose(); },
   };
 }
