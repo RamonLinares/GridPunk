@@ -10,6 +10,7 @@ import { createSolarBay } from './SolarSurfaces';
 import { createSolarLandmarks, solarLandmarkSites } from './SolarLandmarks';
 import { createSolarFacades } from './SolarFacades';
 import { createSolarSkyLife } from './SolarSkyLife';
+import { createSolarArchitecture } from './SolarArchitecture';
 
 /**
  * The selected road layout by day, rebuilt as a solarpunk garden
@@ -50,9 +51,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   }
   const glazingMap = new THREE.CanvasTexture(glazingCanvas); glazingMap.colorSpace = THREE.SRGBColorSpace; glazingMap.anisotropy = 8;
   glass.map = glazingMap; glass.color.setHex(0xd4e3e5); glass.roughness = .27; glass.metalness = .28;
-  const greenRoof = new THREE.MeshStandardMaterial({ color: 0x5b9040, roughness: .96 });
   const hedge = new THREE.MeshStandardMaterial({ color: 0x467f32, roughness: .96 });
-  const vines = [0x3f7d2c, 0x59993a, 0x2f6a27].map(color => new THREE.MeshStandardMaterial({ color, roughness: .95 }));
   const flowers = [0xe4609a, 0xf4d24a, 0x8f68d8, 0xf6f3e8, 0xf08a3c].map(color => new THREE.MeshStandardMaterial({ color, roughness: .9 }));
   const solarPanel = new THREE.MeshStandardMaterial({ color: 0x172741, roughness: .2, metalness: .68, envMapIntensity: 2.5 });
   const frame = new THREE.MeshStandardMaterial({ color: 0xd2d9dc, roughness: .42, metalness: .62 });
@@ -70,6 +69,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   };
   const vegetation = createSolarVegetation(group, rand);
   const tree = vegetation.tree;
+  const architecture = createSolarArchitecture(group, vegetation, rand);
 
   // --- Printed graphics: flags, façade slogans. ---
   const leaf = (c: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) => {
@@ -116,11 +116,23 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     }
     occupied.push({ x, z, r: radius });
     const wall = walls[Math.floor(rand() * walls.length)];
-    const windowedWall = wall === plasterWarm ? facades.warm : facades.cool;
+    const windowedWall = wall === plasterWarm ? facades.warm : rand() < .5 ? facades.tints[Math.floor(rand() * facades.tints.length)] : facades.cool;
     const detailed = near || builder.distanceToTrack(x, z) < 110;
     const world = (u: number, v: number) => new THREE.Vector3(x + co * u + si * v, 0, z - si * u + co * v);
     const local = (material: THREE.Material, u: number, y: number, v: number, sw: number, sh: number, sd: number, tilt = 0) =>
       block(material, x + co * u + si * v, y, z - si * u + co * v, sw, sh, sd, angle, tilt);
+    // Signature forms break the repeated glass-slab kit: stepped Mediterranean hill
+    // blocks along the street, glasshouse domes and hill blocks through the city.
+    const pickStyle = rand();
+    const style = near ? (h >= 40 && pickStyle < .28 ? 'helix' : h < 52 && pickStyle > .5 ? 'terrace' : 'modular')
+      : (h < 45 && pickStyle < .1 ? 'domes' : pickStyle < .4 ? 'terrace' : 'modular');
+    if (style !== 'modular') {
+      if (style === 'terrace') architecture.terraceHill(x, z, w, d, h * .85, angle, detailed);
+      else if (style === 'helix') architecture.helixTower(x, z, Math.min(w, d) * .8, h * 1.35, angle, detailed);
+      else architecture.domeCluster(x, z, Math.min(w, d) * .5, angle);
+      if (near) { local(concrete, 0, .35, d / 2 + 3.2, w, .7, 1.1); local(hedge, 0, 1.1, d / 2 + 3.2, w - .4, .8, .8); }
+      return;
+    }
     const slogan = near && h > 15 && rand() < .35;
     // A third of the street blocks wear a living wall over most of the façade.
     const livingWall = detailed && !slogan && rand() < .34;
@@ -215,17 +227,9 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (builder.distanceToTrack(x, z) < w + 60) return;
     if (occupied.some(p => Math.hypot(x - p.x, z - p.z) < w + p.r + 4)) return;
     occupied.push({ x, z, r: w * .75 });
-    const angle = rand() * Math.PI;
-    block(glass, x, h / 2, z, w, h, w, angle);
-    block(facades.tower, x, h / 2, z, w * .34, h + .4, w * 1.02, angle);
-    for (let y = 4; y < h; y += 4) {
-      block(greenRoof, x, y, z, w + 1.4, .5, w + 1.4, angle);
-      if (y % 12 === 0) block(vines[y % 3], x + Math.cos(angle) * (w / 2 + .8), y - 2.6, z - Math.sin(angle) * (w / 2 + .8), .3, 5, w * .5, angle);
-    }
-    block(greenRoof, x, h + .3, z, w + .8, .6, w + .8, angle);
-    for (let k = 0; k < 3; k++) tree(x + (rand() - .5) * w * .6, h + .6, z + (rand() - .5) * w * .6, .6 + rand() * .3);
-    block(frame, x, h + 1.4, z, w * .5, .14, .16, angle);
-    block(solarPanel, x, h + 1.8, z, w * .5, .06, 2.2, angle, -.42);
+    // Skyline anchors alternate twisting vertical forests and finned sail towers.
+    if (rand() < .5) architecture.helixTower(x, z, w, h, rand() * Math.PI, true);
+    else architecture.sailTower(x, z, w * 1.3, h * 1.1, rand() * Math.PI);
   };
 
   // Each stand owns one aligned local frame and a clearance-tested footprint.
@@ -255,6 +259,22 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     return Math.hypot(x - approach.x - t * dx, z - approach.z - t * dz) < radius + 12;
   });
 
+  // The Arbor Spire claims the most open ground near the middle of the city, so
+  // it stands over the skyline from most of the lap.
+  {
+    const trackBounds = new THREE.Box3();
+    for (const s of spline.samples) trackBounds.expandByPoint(s.position);
+    const hub = trackBounds.getCenter(new THREE.Vector3());
+    let best: { x: number; z: number; score: number } | undefined;
+    for (let gx = -420; gx <= 420; gx += 20) for (let gz = -420; gz <= 420; gz += 20) {
+      const x = hub.x + gx, z = hub.z + gz, clear = builder.distanceToTrack(x, z);
+      if (clear < 135 || occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + 80)) continue;
+      const score = Math.min(clear, 220) - Math.hypot(gx, gz) * .35;
+      if (!best || score > best.score) best = { x, z, score };
+    }
+    if (best) occupied.push({ x: best.x, z: best.z, r: architecture.arborSpire(best.x, best.z, 1.2).r });
+  }
+
   // Street fronts along the whole loop, both sides, mid-rise.
   for (let i = 0; i < spline.count; i += 7) {
     const s = spline.sampleAt(i);
@@ -269,9 +289,9 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   const bounds = new THREE.Box3();
   for (const s of spline.samples) bounds.expandByPoint(s.position);
   const centre = bounds.getCenter(new THREE.Vector3());
-  for (let k = 0; k < 12; k++) {
-    const a = k / 12 * Math.PI * 2 + rand() * .4, r = 360 + rand() * 420;
-    addTower(centre.x + Math.cos(a) * r, centre.z + Math.sin(a) * r, 20 + rand() * 10, 70 + rand() * 90);
+  for (let k = 0; k < 16; k++) {
+    const a = k / 16 * Math.PI * 2 + rand() * .4, r = 340 + rand() * 440;
+    addTower(centre.x + Math.cos(a) * r, centre.z + Math.sin(a) * r, 22 + rand() * 10, 80 + rand() * 110);
   }
   for (let x = -950; x <= 950; x += 68) for (let z = -950; z <= 1000; z += 68) {
     const px = x + (rand() - .5) * 20, pz = z + (rand() - .5) * 20;
@@ -417,7 +437,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   group.add(createSolarBay(spline.samples.map(sample => sample.position)));
   const ridge = (radius: number, base: number, amplitude: number, low: number, high: number, phase: number) => {
     const segments = 512, rows = 10, positions: number[] = [], colors: number[] = [], indices: number[] = [];
-    const lowColor = new THREE.Color(low), highColor = new THREE.Color(high), snow = new THREE.Color(0xf4f6f8), c = new THREE.Color();
+    const lowColor = new THREE.Color(low), highColor = new THREE.Color(high), snow = new THREE.Color(0xdfe5ea), c = new THREE.Color();
     for (let row = 0; row <= rows; row++) for (let i = 0; i <= segments; i++) {
       const a = i / segments * Math.PI * 2;
       const radial = row / rows;
@@ -426,11 +446,13 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const peak = .5 + .5 * Math.sin(a * 5 + phase);
       const teeth = .55 + .3 * Math.sin(a * 17 + phase) + .15 * Math.sin(a * 43);
       const profile = Math.sin(radial * Math.PI);
-      const h = -8 + Math.pow(profile,1.2) * (base + amplitude * peak * teeth) * (1 - bay * .5)
-        + Math.sin(a * 71 + radial * 17) * profile * 13;
+      // Ridged harmonics break the long smooth flanks into spurs, gullies and saddles.
+      const ridged = 1 - Math.abs(Math.sin(a * 23 + phase * 2 + radial * 3.1));
+      const h = -8 + Math.pow(profile,1.2) * (base + amplitude * peak * teeth) * (1 - bay * .5) * (.78 + .32 * ridged)
+        + Math.sin(a * 71 + radial * 17) * profile * 13 + Math.sin(a * 131 + radial * 29) * profile * 7;
       positions.push(centre.x + Math.cos(a) * r,h,centre.z + Math.sin(a) * r);
       c.copy(lowColor).lerp(highColor, Math.min(1,h/(base+amplitude)*1.6));
-      c.lerp(snow, THREE.MathUtils.smoothstep(h + Math.sin(a*61)*18,base+amplitude*.4,base+amplitude*.68));
+      c.lerp(snow, THREE.MathUtils.smoothstep(h + Math.sin(a*61)*26 + Math.sin(a*149)*12,base+amplitude*.52,base+amplitude*.8)*.85);
       c.multiplyScalar(.79 + .21 * Math.sin(a*53+radial*12)**2);
       colors.push(c.r,c.g,c.b);
       if(row>0&&i>0) {
@@ -460,11 +482,11 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const mesh = new THREE.Mesh(geometry, rock);
     mesh.name = 'solar-mountains'; mesh.frustumCulled = false; group.add(mesh);
   };
-  ridge(2150, 160, 420, 0x7d97b0, 0x9fb3c6, 1.3);
+  ridge(2250, 150, 300, 0x6f8aa3, 0x93a8bb, 1.3);
   ridge(1780, 70, 250, 0x5f8468, 0x8aa08a, 4.1);
 
   // --- Sky: deep blue, sun and halo, warm horizon haze and drifting cumulus. ---
-  const sunDirection = new THREE.Vector3(-.65, .95, .5).normalize();
+  const sunDirection = new THREE.Vector3(-.66, .74, .5).normalize();
   const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { uSun: { value: sunDirection.clone() }, uTime: { value: 0 }, uCine: { value: 0 } },
     vertexShader: 'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
@@ -504,7 +526,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   const hemisphere = new THREE.HemisphereLight(0xd5e6ee, 0xa7a08b, 1.1); group.add(hemisphere);
   const cinematicSun = new THREE.Vector3(-.72, .4, .56).normalize();
   let baseEnvironment: number | undefined;
-  const sunLighting = new SunLighting({ camera, parent: group, color: 0xfff0d4, intensity: 4.2, sunDirection, range: 520, splits: [42, 150], shadowMapSize: 2048 });
+  const sunLighting = new SunLighting({ camera, parent: group, color: 0xffecd0, intensity: 4.4, sunDirection, range: 520, splits: [42, 150], shadowMapSize: 2048 });
 
   const rounded = new RoundedBoxGeometry(1, 1, 1, 2, .08);
   const flowerGeometry = new THREE.IcosahedronGeometry(.65, 1);
@@ -519,6 +541,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     }
   }
   vegetation.finish();
+  architecture.finish();
   if (flagMatrices.length) {
     const flags = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.2, 3.6), flagMaterial, flagMatrices.length); flags.name = 'solar-circuit-flags';
     flagMatrices.forEach((m, k) => flags.setMatrixAt(k, m)); flags.computeBoundingSphere(); flags.castShadow = true; group.add(flags);
@@ -530,7 +553,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       updateNeonLedSigns(seconds);
       if (focus) sky.position.copy(focus);
       skyMat.uniforms.uTime.value = seconds;
-      skyLife.update(seconds);
+      skyLife.update(seconds); architecture.update(seconds);
       for (const t of turbines) (t.userData.rotor as THREE.Group).rotation.z = seconds * (t.userData.rotor as THREE.Group).userData.rate;
     },
     createSkyProbeScene() { const probe = new THREE.Scene(); probe.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), skyMat)); return probe; },
@@ -541,11 +564,11 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       // facades model into light and shade and the street carries long shadows.
       const sun = enabled ? cinematicSun : sunDirection;
       sunLighting.setDirection(sun); skyMat.uniforms.uSun.value.copy(enabled ? cinematicSun : sunDirection); skyMat.uniforms.uCine.value = enabled ? 1 : 0;
-      sunLighting.setColor(enabled ? 0xffd9ab : 0xfff0d4); sunLighting.setIntensity(enabled ? 6 : 4.2);
+      sunLighting.setColor(enabled ? 0xffd9ab : 0xffecd0); sunLighting.setIntensity(enabled ? 6 : 4.4);
       hemisphere.color.setHex(enabled ? 0xbac4cf : 0xd5e6ee); hemisphere.groundColor.setHex(enabled ? 0x96805f : 0xa7a08b); hemisphere.intensity = enabled ? .8 : 1.1;
       baseEnvironment ??= scene.environmentIntensity; scene.environmentIntensity = enabled ? baseEnvironment * .85 : baseEnvironment;
       scene.userData.cinematicSun = enabled ? cinematicSun : undefined;
     },
-    disposeExtraResources: () => { textures.forEach(t => t.dispose()); vegetation.dispose(); landmarks.dispose(); facades.dispose(); skyLife.dispose(); },
+    disposeExtraResources: () => { textures.forEach(t => t.dispose()); vegetation.dispose(); landmarks.dispose(); facades.dispose(); skyLife.dispose(); architecture.dispose(); },
   };
 }

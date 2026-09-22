@@ -64,6 +64,7 @@ export function createSolarFacades() {
     material.customProgramCacheKey = () => `solar-facade-metres-v1-${floorHeight}`;
     return material;
   };
-  return { cool: make('solar-windowed-plaster', 0xffffff), warm: make('solar-windowed-sandstone', 0xf4dcc0), tower: make('solar-windowed-tower-core', 0xffffff, 4),
+  const tints = [make('solar-windowed-blush', 0xf6d0bf), make('solar-windowed-sage', 0xdbe7cb), make('solar-windowed-ochre', 0xf6dcae)];
+  return { cool: make('solar-windowed-plaster', 0xffffff), warm: make('solar-windowed-sandstone', 0xf4dcc0), tower: make('solar-windowed-tower-core', 0xffffff, 4), tints,
     dispose: () => { map.dispose(); bumpMap.dispose(); } };
 }
