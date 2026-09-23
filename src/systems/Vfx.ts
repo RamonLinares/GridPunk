@@ -50,6 +50,8 @@ const particleFragment = /* glsl */ `
   uniform vec3 uColor;
   uniform float uSoft;
   uniform float uStreak;
+  uniform vec3 uCore;
+  uniform vec2 uStreakShape; // x: half length, y: half width, in sprite units
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     float d = length(uv);
@@ -59,9 +61,9 @@ const particleFragment = /* glsl */ `
     if (uStreak > 0.5) {
       float along = dot(uv, vDirection);
       float across = abs(dot(uv, vec2(-vDirection.y, vDirection.x)));
-      alpha = (1.0 - smoothstep(0.025, 0.085, across))
-        * (1.0 - smoothstep(0.30, 0.50, abs(along))) * uSoft;
-      color = mix(uColor, vec3(1.0, 0.95, 0.76),
+      alpha = (1.0 - smoothstep(uStreakShape.y * .3, uStreakShape.y, across))
+        * (1.0 - smoothstep(uStreakShape.x * .6, uStreakShape.x, abs(along))) * uSoft;
+      color = mix(uColor, uCore,
         (1.0 - smoothstep(0.0, 0.045, across)) * 0.8);
     }
     alpha *= smoothstep(0.0, 0.2, vLife) * (1.0 - smoothstep(0.6, 1.0, vLife));
@@ -89,7 +91,7 @@ function createPool(color: number, count: number, soft: number, additive: boolea
   const material = new THREE.ShaderMaterial({
     vertexShader: particleVertex,
     fragmentShader: particleFragment,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uSoft: { value: soft }, uMaxSize: { value: maxSize }, uStreak: { value: 0 } },
+    uniforms: { uColor: { value: new THREE.Color(color) }, uSoft: { value: soft }, uMaxSize: { value: maxSize }, uStreak: { value: 0 }, uCore: { value: new THREE.Color(1, .95, .76) }, uStreakShape: { value: new THREE.Vector2(.5, .085) } },
     transparent: true,
     depthWrite: false,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -118,8 +120,8 @@ export class VfxSystem {
   private readonly dust: Pool;
   private readonly sparks: Pool;
   private readonly exhaust: Pool;
-  private readonly spray: Pool;
   private readonly flames: Pool;
+  private readonly droplets: Pool;
   private readonly debris: Pool;
   private readonly smokeAccumulators = new WeakMap<object, number>();
   private readonly skidMarks: THREE.InstancedMesh;
@@ -143,12 +145,16 @@ export class VfxSystem {
     this.sparks = createPool(0xffa62e, 220, 0.9, true, 24);
     this.sparks.material.uniforms.uStreak.value = 1;
     this.exhaust = createPool(0x9aa2ab, 160, 0.3, false, 48);
-    // Wheel spray hangs in the air behind each car; flames are short additive over-run pops.
-    this.spray = createPool(0xd3dde2, 1400, 0.2, false, 64);
+    // Flames are short additive over-run pops; debris falls under gravity.
+    // Tyre spray droplets are motion-blurred streaks thrown back and falling.
+    this.droplets = createPool(0x93a7b1, 1600, .3, false, 22);
+    this.droplets.material.uniforms.uStreak.value = 1;
+    this.droplets.material.uniforms.uCore.value.set(.72, .8, .86);
+    this.droplets.material.uniforms.uStreakShape.value.set(.2, .12);
     this.flames = createPool(0xff7a2c, 120, 0.95, true, 40);
     this.debris = createPool(0x1a1d1f, 120, 0.95, false, 14);
-    this.scene.add(this.smoke.points, this.dust.points, this.sparks.points, this.exhaust.points, this.spray.points, this.flames.points, this.debris.points);
-    this.updaters = [this.smoke, this.dust, this.sparks, this.exhaust, this.spray, this.flames, this.debris];
+    this.scene.add(this.smoke.points, this.dust.points, this.sparks.points, this.exhaust.points, this.droplets.points, this.flames.points, this.debris.points);
+    this.updaters = [this.smoke, this.dust, this.sparks, this.exhaust, this.droplets, this.flames, this.debris];
 
     const markGeo = new THREE.PlaneGeometry(0.32, 0.7);
     markGeo.rotateX(-Math.PI / 2);
@@ -188,18 +194,17 @@ export class VfxSystem {
     if (owner) this.smokeAccumulators.set(owner, accumulator); else this.emitAccumulator = accumulator;
   }
 
-  /** Rooster tails from a rear tyre on a wet surface. `rate` is particles per second. */
-  spawnSpray(contact: THREE.Vector3, velocity: THREE.Vector3, forward: THREE.Vector3, rate: number, dt: number): void {
+  /** Water flung back off a rear tyre: droplets leave slower than the car, fan out and fall. `rate` is per second. */
+  spawnDroplets(contact: THREE.Vector3, velocity: THREE.Vector3, side: THREE.Vector3, rate: number, dt: number): void {
     let n = rate * dt;
     while (n > 0) {
       if (n < 1 && Math.random() > n) break;
       n -= 1;
-      emit(this.spray,
-        contact.x + (Math.random() - .5) * .35, contact.y + .12 + Math.random() * .2, contact.z + (Math.random() - .5) * .35,
-        velocity.x * .5 - forward.x * 2.5 + (Math.random() - .5) * 2.4,
-        1 + Math.random() * 1.8,
-        velocity.z * .5 - forward.z * 2.5 + (Math.random() - .5) * 2.4,
-        3.5 + Math.random() * 5, .5 + Math.random() * .45);
+      const carry = .55 + Math.random() * .2, fan = Math.random() * 1.8, lift = .4 + Math.random() * 1.8;
+      emit(this.droplets,
+        contact.x + (Math.random() - .5) * .3, contact.y + .08 + Math.random() * .12, contact.z + (Math.random() - .5) * .3,
+        velocity.x * carry + side.x * fan, lift, velocity.z * carry + side.z * fan,
+        .3 + Math.random() * .35, .2 + Math.random() * .2);
     }
   }
 
@@ -321,8 +326,7 @@ export class VfxSystem {
         pool.positions[i * 3 + 1] += pool.velocities[i * 3 + 1] * dt;
         pool.positions[i * 3 + 2] += pool.velocities[i * 3 + 2] * dt;
         pool.velocities[i * 3] *= 1 - dt * 1.2;
-        if (pool === this.sparks || pool === this.debris) pool.velocities[i * 3 + 1] -= 9.8 * dt;
-        else if (pool === this.spray) { pool.velocities[i * 3 + 1] -= 2.2 * dt; pool.velocities[i * 3] *= 1 - dt * 1.4; pool.velocities[i * 3 + 2] *= 1 - dt * 1.4; }
+        if (pool === this.sparks || pool === this.debris || pool === this.droplets) pool.velocities[i * 3 + 1] -= 9.8 * dt;
         else pool.velocities[i * 3 + 1] *= 1 - dt * 0.6;
         pool.velocities[i * 3 + 2] *= 1 - dt * 1.2;
         changed = true;

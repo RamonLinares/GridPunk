@@ -2,82 +2,122 @@ import * as THREE from 'three';
 import type { Car } from '../entities/Car';
 import type { VfxSystem } from './Vfx';
 
-const TRAIL_POINTS = 18;
+/** Mist cards behind each rear tyre: distance behind the wheel, size and opacity. */
+const PLUME = [
+  { back: 1.2, size: 1.6, alpha: .22 }, { back: 3, size: 2.4, alpha: .17 }, { back: 5.4, size: 3.3, alpha: .11 },
+  { back: 8.4, size: 4.2, alpha: .06 },
+];
 
 interface CarState {
   car: Car;
   /** Car-local tail-lamp positions (left, right) and exhaust outlets. */
   lamps: THREE.Vector3[];
   outlets: THREE.Vector3[];
-  history: { points: THREE.Vector3[]; times: number[] }[];
   lastThrottle: number;
   popCooldown: number;
+  seed: number;
 }
 
 export interface CarEffectInput { car: Car; wet: number; }
 
+const plumeVertex = /* glsl */ `
+  attribute vec4 aPlume; // x: size, y: alpha, z: seed, w: stretch along the view-space motion
+  attribute vec2 aDrift;
+  varying vec2 vUv; varying vec2 vLocal; varying float vAlpha; varying float vSeed;
+  #include <fog_pars_vertex>
+  void main() {
+    vUv = uv; vAlpha = aPlume.y; vSeed = aPlume.z;
+    vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
+    vec2 offset = position.xy * aPlume.x;
+    // The car's projected direction of travel orients the haze texture's flow.
+    vec2 along = length(aDrift) > .001 ? normalize(aDrift) : vec2(0., 1.);
+    vec2 across = vec2(-along.y, along.x);
+    vLocal = vec2(dot(position.xy, along), dot(position.xy, across));
+    // A low, wide card: flattened vertically on screen so the haze hugs the road
+    // from any viewing angle; the texture, not the card shape, carries the motion.
+    offset.y *= .55;
+    mvPosition.xy += offset;
+    // Fade cards that reach the lens instead of letting one fill the screen.
+    vAlpha *= smoothstep(2.5, 9., -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }`;
+const plumeFragment = /* glsl */ `
+  uniform float uTime; uniform vec3 uColor;
+  varying vec2 vUv; varying vec2 vLocal; varying float vAlpha; varying float vSeed;
+  #include <fog_pars_fragment>
+  float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+  float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
+  float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*noise(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}
+  void main() {
+    // Turbulent water haze dragged back along the direction of travel (x):
+    // domain-warped noise gives billows and holes rather than lines, and
+    // nothing drifts upward, so it never reads as steam.
+    vec2 q = vLocal * 3.2 + vec2(-uTime * 2.4 + vSeed * 5., vSeed * 3.);
+    vec2 warp = vec2(fbm(q + vec2(0., uTime * .7)), fbm(q + vec2(5.2, 1.3)));
+    float n = fbm(q + warp * 1.6);
+    float envelope = exp(-dot(vLocal * vec2(2.2, 3.), vLocal * vec2(2.2, 3.)));
+    float base = smoothstep(.0, .3, vUv.y);
+    float a = vAlpha * envelope * base * smoothstep(.38, .72, n) * 1.3;
+    if (a < .004) discard;
+    gl_FragColor = vec4(uColor * (.85 + .3 * n), a);
+    #include <fog_fragment>
+  }`;
+
 /**
- * Per-car effects for the whole grid: rear-wheel rain spray, over-run
- * backfires, rival tyre smoke and, on night circuits, tail-lamp light trails
- * drawn as camera-facing ribbons that brighten under braking.
+ * Per-car effects for the whole grid: wet-road spray (droplets flung back off
+ * the rear tyres over a thin haze that streams along the direction of travel),
+ * over-run backfires and rival tyre smoke on dry circuits.
  */
 export class CarEffects {
   private readonly states: CarState[];
-  private readonly trail: THREE.Mesh;
-  private readonly positions: Float32Array;
-  private readonly colors: Float32Array;
+  private readonly plumes: THREE.InstancedMesh;
+  private readonly plumeData: THREE.InstancedBufferAttribute;
+  private readonly plumeDrift: THREE.InstancedBufferAttribute;
+  private readonly plumeMaterial: THREE.ShaderMaterial;
+  private readonly matrix = new THREE.Matrix4();
   private readonly wheel = new THREE.Vector3();
   private readonly forward = new THREE.Vector3();
   private readonly backward = new THREE.Vector3();
   private readonly world = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
-  private readonly toCamera = new THREE.Vector3();
-  private readonly tangent = new THREE.Vector3();
+  private readonly motion = new THREE.Vector3();
+  private readonly viewA = new THREE.Vector3();
+  private readonly viewB = new THREE.Vector3();
   private time = 0;
   private visible = true;
 
-  constructor(scene: THREE.Scene, private readonly vfx: VfxSystem, cars: readonly Car[], private readonly night: boolean) {
-    this.states = cars.map(car => {
-      const { lamps, outlets } = sockets(car);
-      return { car, lamps, outlets, lastThrottle: 0, popCooldown: 0,
-        history: lamps.map(() => ({ points: [] as THREE.Vector3[], times: [] as number[] })) };
-    });
-    const ribbons = this.states.length * 2, verts = ribbons * TRAIL_POINTS * 2;
-    this.positions = new Float32Array(verts * 3); this.colors = new Float32Array(verts * 4);
-    const index: number[] = [];
-    for (let r = 0; r < ribbons; r++) for (let i = 0; i < TRAIL_POINTS - 1; i++) {
-      const a = (r * TRAIL_POINTS + i) * 2;
-      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-    geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 4).setUsage(THREE.DynamicDrawUsage));
-    geometry.setIndex(index);
-    this.trail = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false,
-      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
-    this.trail.name = 'tail-lamp-trails'; this.trail.frustumCulled = false; this.trail.visible = night;
-    scene.add(this.trail);
+  constructor(scene: THREE.Scene, private readonly vfx: VfxSystem, cars: readonly Car[], night: boolean) {
+    this.states = cars.map((car, i) => ({ car, ...sockets(car), lastThrottle: 0, popCooldown: 0, seed: i * 1.37 }));
+    const count = this.states.length * 2 * PLUME.length;
+    this.plumeMaterial = new THREE.ShaderMaterial({ vertexShader: plumeVertex, fragmentShader: plumeFragment, transparent: true, depthWrite: false, fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uColor: { value: new THREE.Color(night ? 0x8e9fa8 : 0xc9d2d6) } }]) });
+    const card = new THREE.PlaneGeometry(1, 1);
+    this.plumeData = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4).setUsage(THREE.DynamicDrawUsage);
+    this.plumeDrift = new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2).setUsage(THREE.DynamicDrawUsage);
+    card.setAttribute('aPlume', this.plumeData); card.setAttribute('aDrift', this.plumeDrift);
+    this.plumes = new THREE.InstancedMesh(card, this.plumeMaterial, count);
+    this.plumes.name = 'wet-spray-plumes'; this.plumes.frustumCulled = false; this.plumes.renderOrder = 2;
+    scene.add(this.plumes);
+
   }
 
-  setVisible(visible: boolean): void { this.visible = visible; this.trail.visible = visible && this.night; }
+  setVisible(visible: boolean): void { this.visible = visible; this.plumes.visible = visible; }
 
   update(dt: number, inputs: readonly CarEffectInput[], camera: THREE.Camera, player: Car): void {
     this.time += dt;
+    this.plumeMaterial.uniforms.uTime.value = this.time;
+    let instance = 0;
     for (const input of inputs) {
       const state = this.states.find(s => s.car === input.car);
-      if (!state || !this.visible) continue;
+      if (!state) continue;
       const car = state.car, t = car.physics.telemetry, speed = t.speed;
       const near = car === player || car.group.position.distanceToSquared(camera.position) < 170 * 170;
       this.forward.set(0, 0, 1).applyQuaternion(car.group.quaternion);
-      if (near && input.wet > .05 && speed > 10 && t.onTrack) {
-        const rate = input.wet * Math.min(1, speed / 60) * (car === player ? 95 : 70);
-        for (const key of ['rl', 'rr'] as const) {
-          car.model.wheels[key].getWorldPosition(this.wheel);
-          this.wheel.y = car.group.position.y;
-          this.vfx.spawnSpray(this.wheel, car.physics.velocity, this.forward, rate, dt);
-        }
-      }
-      if (car !== player && near && speed > 12 && (Math.abs(t.slipAngleRear) > .16 || t.wheelSlip > .5))
+      instance = this.updatePlume(state, input.wet, camera, player, dt, instance);
+      if (!this.visible) continue;
+      // Tyres do not smoke on a wet road; the mist plume stands in for it there.
+      if (car !== player && near && input.wet < .2 && speed > 12 && (Math.abs(t.slipAngleRear) > .2 || t.wheelSlip > .6))
         this.vfx.spawnSmoke(car.group.position, car.group.quaternion, speed, dt, car);
       // Over-run: a pop when the throttle snaps shut at high revs, then the odd crackle.
       state.popCooldown -= dt;
@@ -93,47 +133,52 @@ export class CarEffects {
       }
       state.lastThrottle = t.throttle;
     }
-    if (this.night && this.visible) this.updateTrails(camera, player);
+    this.plumes.count = instance;
+    this.plumes.instanceMatrix.needsUpdate = true; this.plumeData.needsUpdate = true; this.plumeDrift.needsUpdate = true;
   }
 
-  private updateTrails(camera: THREE.Camera, player: Car): void {
-    const maxAge = .22;
-    let vertex = 0;
-    for (const state of this.states) {
-      const car = state.car, t = car.physics.telemetry;
-      // The player's own trail would stream back through the chase camera.
-      const glow = car === player ? 0 : Math.min(1, t.speed / 25) * (.32 + t.brake * .68);
-      state.lamps.forEach((lamp, k) => {
-        const h = state.history[k];
-        h.points.unshift(lamp.clone().applyMatrix4(car.group.matrixWorld)); h.times.unshift(this.time);
-        while (h.points.length > TRAIL_POINTS || (h.times.length > 2 && this.time - h.times[h.times.length - 1] > maxAge)) { h.points.pop(); h.times.pop(); }
-        for (let i = 0; i < TRAIL_POINTS; i++) {
-          const p = h.points[Math.min(i, h.points.length - 1)];
-          const last = h.points.length - 1, next = h.points[Math.min(i + 1, last)], prev = h.points[Math.min(Math.max(0, i - 1), last)];
-          this.tangent.subVectors(prev, next);
-          this.toCamera.subVectors(camera.position, p);
-          this.side.crossVectors(this.tangent, this.toCamera);
-          const length = this.side.length();
-          const width = (.05 + t.brake * .05) * (1 - i / TRAIL_POINTS * .5);
-          if (length > 1e-6) this.side.multiplyScalar(width / length); else this.side.set(0, width, 0);
-          const age = i < h.times.length ? (this.time - h.times[i]) / maxAge : 1;
-          const alpha = i >= h.points.length ? 0 : glow * Math.pow(Math.max(0, 1 - age), 1.6);
-          for (const sign of [1, -1]) {
-            const v = vertex++;
-            this.positions[v * 3] = p.x + this.side.x * sign; this.positions[v * 3 + 1] = p.y + this.side.y * sign; this.positions[v * 3 + 2] = p.z + this.side.z * sign;
-            this.colors[v * 4] = 1; this.colors[v * 4 + 1] = .13 + t.brake * .05; this.colors[v * 4 + 2] = .1; this.colors[v * 4 + 3] = alpha;
-          }
-        }
+  /** Cards trail each rear tyre along the car's motion, growing and thinning with distance. */
+  private updatePlume(state: CarState, wet: number, camera: THREE.Camera, player: Car, dt: number, instance: number): number {
+    const car = state.car, speed = car.physics.telemetry.speed;
+    // The player's own plume sits between the chase camera and the road ahead, so it stays faint.
+    const strength = this.visible && car.physics.telemetry.onTrack ? wet * THREE.MathUtils.smoothstep(speed, 8, 45) * (car === player ? .45 : 1) : 0;
+    if (strength < .02 || car.group.position.distanceToSquared(camera.position) > 220 * 220) return instance;
+    const reach = .55 + Math.min(1, speed / 65) * .75;
+    this.motion.copy(car.physics.velocity).setY(0);
+    if (this.motion.lengthSq() < 1) this.motion.copy(this.forward);
+    this.motion.normalize();
+    for (const [w, key] of (['rl', 'rr'] as const).entries()) {
+      car.model.wheels[key].getWorldPosition(this.wheel);
+      const outward = w === 0 ? -1 : 1;
+      this.side.set(this.motion.z, 0, -this.motion.x).multiplyScalar(outward);
+      this.wheel.y = car.group.position.y;
+      if (this.visible) this.vfx.spawnDroplets(this.wheel, car.physics.velocity, this.side, strength * (car === player ? 140 : 200), dt);
+      PLUME.forEach((puff, k) => {
+        const back = puff.back * reach, size = puff.size * (.7 + .3 * reach);
+        const wobble = Math.sin(this.time * 3.1 + state.seed + k * 1.7) * .15 * size;
+        this.world.copy(this.wheel).addScaledVector(this.motion, -back).addScaledVector(this.side, back * .12 + wobble);
+        this.world.y = car.group.position.y + .05 + size * .16;
+        // Screen direction this card's water travels in, so its streaks stream the right way.
+        this.viewA.copy(this.world).applyMatrix4(camera.matrixWorldInverse);
+        this.viewB.copy(this.world).addScaledVector(this.motion, -1).applyMatrix4(camera.matrixWorldInverse);
+        const driftX = this.viewB.x / Math.max(.1, -this.viewB.z) - this.viewA.x / Math.max(.1, -this.viewA.z);
+        const driftY = this.viewB.y / Math.max(.1, -this.viewB.z) - this.viewA.y / Math.max(.1, -this.viewA.z);
+        this.matrix.makeTranslation(this.world.x, this.world.y, this.world.z);
+        this.plumes.setMatrixAt(instance, this.matrix);
+        this.plumeData.setXYZW(instance, size, puff.alpha * strength, state.seed + k * .31 + w * 2.3, 1 + Math.min(1.2, reach * .9));
+        this.plumeDrift.setXY(instance, driftX, driftY);
+        instance++;
       });
     }
-    const g = this.trail.geometry;
-    g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
+    return instance;
   }
 
-  /** A restart or recovery teleports cars; old trail points must not smear across the city. */
-  reset(): void { for (const s of this.states) for (const h of s.history) { h.points.length = 0; h.times.length = 0; } }
+  /** Kept for callers that teleport cars; effects are derived from the current pose. */
+  reset(): void { /* nothing is accumulated across frames */ }
 
-  dispose(): void { this.trail.removeFromParent(); this.trail.geometry.dispose(); (this.trail.material as THREE.Material).dispose(); }
+  dispose(): void {
+    this.plumes.removeFromParent(); this.plumes.geometry.dispose(); this.plumeMaterial.dispose();
+  }
 }
 
 /** Finds the rearmost lamp edges and exhaust outlets in car-local space. */

@@ -6,12 +6,12 @@ Applies to both cars and all six stage/circuit combinations.
 
 `src/systems/CarEffects.ts` drives per-car effects for the player and all five rivals:
 
-- **Rain spray**: rooster tails from both rear tyres, scaled by speed and the circuit's rain exposure (none in tunnels or on the dry Solarpunk and Steampunk circuits). Rivals beyond 170 m emit nothing.
-- **Tail-lamp trails** (night Cyberpunk circuits): camera-facing red ribbons from the outer edges of each rival's lamp cluster, found from the brake-lamp geometry. They last about 0.2 s and brighten under braking. The player's own trail is off, because it would stream back through the chase camera.
+- **Rain spray**: water thrown back off each rear tyre. Fine droplets leave at 55–75% of the car's speed, fan out and fall under gravity, and are drawn as short soft specks. Under them is a low haze of screen-facing cards, flattened on screen so it stays close to the road from any angle. The haze uses domain-warped noise that is dragged backward along the car's path, which gives billows and gaps instead of lines, and nothing rises. The spray scales with speed and the circuit's rain exposure, so there is none in tunnels or on the dry circuits. The player's own spray is lighter, and haze close to the lens fades out. Earlier versions read as separate balls, then as rising steam, then as straight fibrous streaks, and each was replaced.
+- **Tail-lamp trails were removed.** Neither a long light trail nor a short motion smear looked right when the camera was close behind a car.
 - **Over-run backfires**: flame pops from the exhaust outlets when the throttle snaps shut at high revs, with occasional crackle on the over-run. The Shinsei and K89 have their own outlet positions.
-- **Rival tyre smoke** when a rival slides, plus carbon debris on heavy contacts, alongside the existing sparks.
+- **Rival tyre smoke** when a rival slides on a dry circuit (tyres do not smoke on a wet road), plus carbon debris on heavy contacts, alongside the existing sparks.
 
-`src/systems/Vfx.ts` gains spray, flame and debris pools. Particles use a squared radial falloff so overlapping puffs read as mist. Streaked particles (sparks) take their screen direction from two projected points, so motion toward the lens still streaks correctly.
+`src/systems/Vfx.ts` gains droplet, flame and debris pools. Particles use a squared radial falloff so overlapping puffs read as mist. Streaked particles (sparks) take their screen direction from two projected points, so motion toward the lens still streaks correctly.
 
 A high-speed air-streak effect was tried and removed at the owner's request. Above about 160 km/h it read as white rectangles on screen.
 
