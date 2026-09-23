@@ -17,7 +17,7 @@ for (const circuit of ['neon', 'kairo', 'solar', 'steam', 'neon-solar', 'neon-st
     localStorage.setItem(`gridpunk:${circuit}-sprint-best-v1:${legacy}`, '90');
   }, { circuit, legacy: isMobile ? 'normal' : 'hard' });
   // Unknown legacy links fall back to Neon; Kairo is selected explicitly.
-  await page.goto(circuit !== 'neon' ? `/?circuit=${circuit}` : isMobile ? '/?circuit=monaco' : '/');
+  await page.goto(circuit !== 'neon' ? `/?circuit=${circuit}` : isMobile ? '/?circuit=monaco' : '/?circuit=neon');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__ && document.querySelector<HTMLElement>('#loading')?.hidden);
   await expect(page).toHaveTitle(`GridPunk — ${TITLES[circuit]}`);
   await expect(page.locator('#home, [data-pick]')).toHaveCount(0);

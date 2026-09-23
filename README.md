@@ -8,11 +8,11 @@ A racing game with three stages: **Cyberpunk**, **Solarpunk**, and **Steampunk**
 
 ## Play
 
-[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose your stage, circuit and car, then press **Start race**.
+[Open GridPunk in your browser](https://gridpunk.smallweblab.com/), choose a stage and circuit, then press **Load race**. The game code and world assets load after that choice. Pick your car on the race screen and press **Start race**. Direct `?circuit=` links still open their chosen race immediately.
 
 ## What's included
 
-- Three stage selectors, each with two circuit cards. Switching stage retains the selected layout and car. Existing circuit links and records remain compatible.
+- A lightweight opening screen for Cyberpunk, Solarpunk and Steampunk, each with two circuit choices. Switching stage retains the selected layout. The race screen also lets you change stage, circuit and car. Existing circuit links and records remain compatible.
 - Neon Solar and Neon Steam: the original District centreline, banked turns and tunnel ported into garden-city and foundry-city scenery. The themed underpasses retain 7.2 m clearance. Open `?stage=solarpunk&circuit=neon` or `?stage=steampunk&circuit=neon`. See [stage and circuit notes](docs/stages.md).
 
 - Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover and a giant animated Ferris wheel with pink rim lights, ramen and bonsai holograms, and a Mars video billboard. Open directly with `?circuit=kairo`.
@@ -71,6 +71,7 @@ Pushes to `main` deploy automatically to GitHub Pages. See [deployment notes](do
 - `src/entities/`: both cars and their runtime models.
 - `src/systems/`: driving, rivals, audio, cameras, timing and replay.
 - `public/circuits/`, `public/cars/`: self-contained runtime media/models.
+- `public/menu/`: compressed captures from all three worlds and the locally served display font. With the dev server running, `node scripts/capture-selection-art.mjs` rebuilds the images and actual circuit outlines (requires Chrome and `cwebp`).
 - `assets/`, `scripts/blender/`: authoring sources; Blender is only needed to rebuild models.
 - [Credits](public/credits.html) and [asset manifest](public/data/asset-manifest.json): asset sources and licences.
 

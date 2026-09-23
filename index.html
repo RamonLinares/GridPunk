@@ -8,8 +8,52 @@
     <meta name="description" content="GridPunk — race the Neon District. Three laps, six cars, rain-soaked streets and a city that never sleeps. Play with keyboard, controller or touch." />
     <title>GridPunk — Neon District</title>
   </head>
-  <body data-session="welcome" class="neon-race">
-
+  <body data-session="welcome" data-boot="initial" class="neon-race">
+    <section id="stage-select" class="stage-select" aria-labelledby="selection-title">
+      <div id="selection-scene" class="selection-scene" aria-hidden="true"></div>
+      <div class="selection-shade" aria-hidden="true"></div>
+      <div class="selection-shell">
+        <header class="selection-header">
+          <span class="selection-brand"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M2 32 20 2h8L10 32zm14 0L34 2h8L24 32z"/></svg>GRIDPUNK</span>
+          <div class="selection-mode"><span>STREET RACING</span><b>SINGLE PLAYER</b></div>
+        </header>
+        <div class="selection-layout">
+          <div class="selection-world">
+            <div class="selection-world-copy">
+              <p class="selection-world-index"><span id="selection-stage-number">01</span><span>/ 03</span><b>SELECT YOUR WORLD</b></p>
+              <h1 id="selection-title"><span id="selection-stage-prefix">CYBER</span><em>PUNK</em></h1>
+              <p id="selection-stage-description" class="selection-stage-description"></p>
+              <p id="selection-conditions" class="selection-conditions"></p>
+            </div>
+            <div class="selection-world-picker">
+              <div class="selection-label"><span>01 / STAGE</span><span>3 AVAILABLE</span></div>
+              <div id="select-stages" class="selection-stage-grid" role="group" aria-label="Choose stage"></div>
+            </div>
+          </div>
+          <aside class="selection-race" aria-label="Race setup">
+            <div class="selection-dock-heading"><span>02 / CIRCUIT</span><h2>CHOOSE YOUR ROUTE</h2><p>3 laps <i></i> 6 cars <i></i> Sprint race</p></div>
+            <div id="select-circuits" class="selection-circuit-list" role="group" aria-label="Choose circuit"></div>
+            <div class="selection-track-section">
+              <div id="selection-map" class="selection-map"></div>
+              <div class="selection-track-info">
+                <div class="selection-stats"><div><strong id="selection-length">3.744</strong><span>KILOMETRES</span></div><div><strong id="selection-corners">12</strong><span>CORNERS</span></div></div>
+                <p id="selection-route-description"></p>
+              </div>
+            </div>
+            <div class="selection-launch-area">
+              <p id="selection-name" class="selection-name" aria-live="polite"></p>
+              <p id="selection-error" role="alert"></p>
+              <button id="selection-launch" type="button"><span>LOAD RACE</span><svg viewBox="0 0 32 20" aria-hidden="true"><path d="m2 2 8 8-8 8m12-16 8 8-8 8"/></svg></button>
+            </div>
+          </aside>
+        </div>
+        <footer class="selection-bottom">
+          <span class="selection-keyboard-hints"><kbd>TAB</kbd> SELECT <kbd>ENTER</kbd> CONFIRM</span>
+          <span class="selection-grid-mark" aria-hidden="true"></span>
+          <a href="/credits.html">CREDITS &amp; LICENCES</a>
+        </footer>
+      </div>
+    </section>
     <main id="app">
       <canvas id="game-canvas" aria-label="Neon District driving game" tabindex="0"></canvas>
       <nav id="session-toolbar" aria-label="Race controls">
@@ -54,6 +98,6 @@
       </div></div>
     </main>
         <noscript>JavaScript is required to play GridPunk.</noscript>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/boot.ts"></script>
   </body>
 </html>

@@ -1,4 +1,3 @@
-import './styles.css';
 import { installReplayPanel } from './systems/ReplayPanel';
 import { STAGES, LAYOUT_NAMES, circuitsForStage, circuitFor, selectedCircuit, isDryCircuit, type CircuitId, type StageId } from './game/track/circuits';
 import { GamepadActions } from './core/GamepadActions';
