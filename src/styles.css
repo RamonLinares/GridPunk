@@ -2309,3 +2309,55 @@ body.replay-active #hud-root,body.replay-active #session-toolbar,body.replay-act
   .stage-picker .assist-row button { font-size:9px; }
   .circuit-picker .assist-row button { font-size:10px; padding:8px; }
 }
+
+/* Race-craft HUD: live delta, running order and position changes. */
+.live-time { position:relative; }
+.lap-delta { display:inline-flex; align-items:baseline; gap:6px; margin-top:4px; padding:2px 7px 2px 6px; border-left:2px solid currentColor; background:rgba(4,12,16,.42); font-variant-numeric:tabular-nums; }
+.lap-delta small { font:600 7px var(--font); letter-spacing:.14em; color:var(--muted); }
+.lap-delta b { font:700 14px var(--mono); min-width:7ch; text-align:right; }
+.lap-delta[data-trend="ahead"] { color:#6ff09a; }
+.lap-delta[data-trend="behind"] { color:#ff6a5c; }
+.lap-delta[data-trend="level"] { color:var(--ink); }
+
+.standings { position:absolute; left:32px; top:206px; width:168px; margin:0; padding:3px 0; list-style:none; background:linear-gradient(90deg,rgba(4,12,16,.62),rgba(4,12,16,.18)); border-left:2px solid var(--accent); font-variant-numeric:tabular-nums; text-shadow:0 1px 6px rgba(3,12,16,.8); }
+.solar-race .standings { top:222px; }
+.standings li { display:grid; grid-template-columns:16px 3px 1fr auto; align-items:center; gap:7px; height:19px; padding:0 6px 0 4px; font:600 9px var(--mono); letter-spacing:.04em; color:#d6e2df; border-bottom:1px solid rgba(219,233,231,.08); }
+.standings li b { font:700 10px var(--mono); color:var(--muted); text-align:right; }
+.standings li i { height:12px; border-radius:1px; }
+.standings li em { font-style:normal; color:#b5c7c4; font-size:9px; }
+.standings li.player { background:linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,.02)); color:var(--ink); }
+.standings li.player b, .standings li.player span { color:var(--accent); }
+#hud-root:not(.race-live) .standings { opacity:0; }
+.standings { transition:opacity .3s; }
+
+.position-change { position:absolute; left:74px; top:28px; font-size:13px; opacity:0; transform:translateY(0); }
+#hud-root.position-gained .position-change { color:#6ff09a; animation:position-pop 1.4s ease-out; }
+#hud-root.position-lost .position-change { color:#ff6a5c; animation:position-pop-down 1.4s ease-out; }
+#hud-root.position-gained #hud-position { animation:position-pulse .6s ease-out; color:#6ff09a; }
+#hud-root.position-lost #hud-position { animation:position-pulse .6s ease-out; color:#ff8a7d; }
+.position-readout { position:relative; }
+@keyframes position-pop { 0% { opacity:0; transform:translateY(6px); } 15% { opacity:1; transform:translateY(0); } 75% { opacity:1; } 100% { opacity:0; transform:translateY(-4px); } }
+@keyframes position-pop-down { 0% { opacity:0; transform:translateY(-6px); } 15% { opacity:1; transform:translateY(0); } 75% { opacity:1; } 100% { opacity:0; transform:translateY(4px); } }
+@keyframes position-pulse { 0% { transform:scale(1.28); } 100% { transform:scale(1); } }
+#hud-position { display:inline-block; transform-origin:left bottom; transition:color .5s; }
+
+.hud-message.final { color:#1a1208; background:linear-gradient(90deg,#f4df88,#ffffff 50%,#f4df88); border-color:#fff; letter-spacing:.3em; }
+
+/* Steering-wheel shift lights: green, red, then blue at the limit, flashing at redline. */
+.shift-lights i.lit { background:#5fe38a; box-shadow:0 0 8px rgba(95,227,138,.5); }
+.shift-lights i.lit:nth-child(n+6) { background:#ff4a3d; box-shadow:0 0 8px rgba(255,74,61,.5); }
+.shift-lights i.lit:nth-child(n+11) { background:#4d8dff; box-shadow:0 0 9px rgba(77,141,255,.6); }
+.shift-lights.redline i.lit { background:#7fb2ff; animation:shift-flash .12s steps(2) infinite; }
+@keyframes shift-flash { 50% { opacity:.25; } }
+
+@media (max-width:700px), (pointer:coarse) {
+  .standings { display:none; }
+  .lap-delta { padding:1px 5px; margin-top:2px; }
+  .lap-delta small { display:none; }
+  .lap-delta b { font-size:11px; }
+}
+@media (max-height:620px) { .standings { display:none; } }
+@media (prefers-reduced-motion:reduce) {
+  #hud-root.position-gained #hud-position, #hud-root.position-lost #hud-position, .position-change { animation:none!important; }
+  .shift-lights.redline i.lit { animation:none; }
+}

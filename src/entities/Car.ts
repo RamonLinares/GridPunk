@@ -114,7 +114,7 @@ export class Car {
         this.halfWidth = builder.halfWidth;
         this.kerbSide = builder.kerbSide;
         this.model =
-            neonVehicle === 'shinsei' ? createShinseiCarModel() : createNeonCarModel(livery);
+            neonVehicle === 'shinsei' ? createShinseiCarModel(livery) : createNeonCarModel(livery);
         this.group = this.model.group;
         this.barrierResolver = new CarBarrierResolver(builder, renderedFootprintBounds(this.group));
         this.wheelMounts = Object.values(this.model.wheels).map((wheel) => {

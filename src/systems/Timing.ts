@@ -24,6 +24,8 @@ export class Timing {
   private started = false;
   private distanceSinceLine = 0;
   private lapArmed = false;
+  /** True once the current lap started at the line, so distance and time are comparable. */
+  get armed(): boolean { return this.lapArmed; }
 
   constructor(spline: TrackSpline) {
     this.lapLength = spline.length;

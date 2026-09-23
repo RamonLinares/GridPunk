@@ -25,8 +25,12 @@ const particleVertex = /* glsl */ `
   void main() {
     vLife = aLife;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vec2 direction = (modelViewMatrix * vec4(aVelocity, 0.0)).xy;
-    vDirection = length(direction) > 0.001 ? normalize(vec2(direction.x, -direction.y)) : vec2(0.0, 1.0);
+    // Screen-space motion from two projected points, so motion straight at the
+    // lens still streaks radially from the vanishing point.
+    vec4 clipA = projectionMatrix * mv;
+    vec4 clipB = projectionMatrix * (modelViewMatrix * vec4(position + aVelocity * 0.03, 1.0));
+    vec2 direction = clipB.xy / max(clipB.w, 0.001) - clipA.xy / max(clipA.w, 0.001);
+    vDirection = length(direction) > 1e-5 ? normalize(vec2(direction.x, -direction.y)) : vec2(0.0, 1.0);
     float dist = max(-mv.z, 0.1);
     // Cap the on-screen size: without this a particle right next to the chase
     // camera projects to thousands of pixels and fills the screen.
@@ -35,7 +39,7 @@ const particleVertex = /* glsl */ `
     // Fade puffs that come very close to the lens, so a stack of overlapping
     // particles can never cover the whole frame (this blew out on impacts).
     vFade = smoothstep(1.5, 5.0, dist);
-    gl_Position = projectionMatrix * mv;
+    gl_Position = clipA;
   }
 `;
 
@@ -49,7 +53,8 @@ const particleFragment = /* glsl */ `
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     float d = length(uv);
-    float alpha = smoothstep(0.5, 0.0, d) * uSoft;
+    // A squared falloff keeps overlapping puffs reading as mist, not discs.
+    float alpha = pow(smoothstep(0.5, 0.0, d), 2.2) * uSoft;
     vec3 color = uColor;
     if (uStreak > 0.5) {
       float along = dot(uv, vDirection);
@@ -113,6 +118,10 @@ export class VfxSystem {
   private readonly dust: Pool;
   private readonly sparks: Pool;
   private readonly exhaust: Pool;
+  private readonly spray: Pool;
+  private readonly flames: Pool;
+  private readonly debris: Pool;
+  private readonly smokeAccumulators = new WeakMap<object, number>();
   private readonly skidMarks: THREE.InstancedMesh;
   private readonly skidMatrix = new THREE.Matrix4();
   private readonly skidQuat = new THREE.Quaternion();
@@ -134,8 +143,12 @@ export class VfxSystem {
     this.sparks = createPool(0xffa62e, 220, 0.9, true, 24);
     this.sparks.material.uniforms.uStreak.value = 1;
     this.exhaust = createPool(0x9aa2ab, 160, 0.3, false, 48);
-    this.scene.add(this.smoke.points, this.dust.points, this.sparks.points, this.exhaust.points);
-    this.updaters = [this.smoke, this.dust, this.sparks, this.exhaust];
+    // Wheel spray hangs in the air behind each car; flames are short additive over-run pops.
+    this.spray = createPool(0xd3dde2, 1400, 0.2, false, 64);
+    this.flames = createPool(0xff7a2c, 120, 0.95, true, 40);
+    this.debris = createPool(0x1a1d1f, 120, 0.95, false, 14);
+    this.scene.add(this.smoke.points, this.dust.points, this.sparks.points, this.exhaust.points, this.spray.points, this.flames.points, this.debris.points);
+    this.updaters = [this.smoke, this.dust, this.sparks, this.exhaust, this.spray, this.flames, this.debris];
 
     const markGeo = new THREE.PlaneGeometry(0.32, 0.7);
     markGeo.rotateX(-Math.PI / 2);
@@ -152,10 +165,11 @@ export class VfxSystem {
 
   setVisible(visible:boolean):void {for(const pool of this.updaters)pool.points.visible=visible;this.skidMarks.visible=visible;}
 
-  spawnSmoke(pos: THREE.Vector3, quat: THREE.Quaternion, speed: number, dt: number): void {
-    this.emitAccumulator += dt * Math.min(30, 5 + speed * 0.25);
-    while (this.emitAccumulator >= 1) {
-      this.emitAccumulator -= 1;
+  spawnSmoke(pos: THREE.Vector3, quat: THREE.Quaternion, speed: number, dt: number, owner?: object): void {
+    let accumulator = owner ? this.smokeAccumulators.get(owner) ?? 0 : this.emitAccumulator;
+    accumulator += dt * Math.min(30, 5 + speed * 0.25);
+    while (accumulator >= 1) {
+      accumulator -= 1;
       const side = Math.random() > 0.5 ? 1 : -1;
       const off = new THREE.Vector3(side * 0.9, 0.1, -1.7).applyQuaternion(quat);
       const size = 8 + Math.random() * 14;
@@ -170,6 +184,42 @@ export class VfxSystem {
         size,
         1.4 + Math.random(),
       );
+    }
+    if (owner) this.smokeAccumulators.set(owner, accumulator); else this.emitAccumulator = accumulator;
+  }
+
+  /** Rooster tails from a rear tyre on a wet surface. `rate` is particles per second. */
+  spawnSpray(contact: THREE.Vector3, velocity: THREE.Vector3, forward: THREE.Vector3, rate: number, dt: number): void {
+    let n = rate * dt;
+    while (n > 0) {
+      if (n < 1 && Math.random() > n) break;
+      n -= 1;
+      emit(this.spray,
+        contact.x + (Math.random() - .5) * .35, contact.y + .12 + Math.random() * .2, contact.z + (Math.random() - .5) * .35,
+        velocity.x * .5 - forward.x * 2.5 + (Math.random() - .5) * 2.4,
+        1 + Math.random() * 1.8,
+        velocity.z * .5 - forward.z * 2.5 + (Math.random() - .5) * 2.4,
+        3.5 + Math.random() * 5, .5 + Math.random() * .45);
+    }
+  }
+
+  /** A short over-run pop from an exhaust outlet, blown backwards. */
+  spawnBackfire(outlet: THREE.Vector3, backward: THREE.Vector3, velocity: THREE.Vector3, strength = 1): void {
+    const n = 3 + Math.floor(Math.random() * 3 * strength);
+    for (let i = 0; i < n; i += 1) {
+      const push = 2 + Math.random() * 4;
+      emit(this.flames, outlet.x, outlet.y, outlet.z,
+        velocity.x + backward.x * push + (Math.random() - .5), velocity.y + (Math.random() - .3) * .8, velocity.z + backward.z * push + (Math.random() - .5),
+        (1.6 + Math.random() * 1.8) * strength, .07 + Math.random() * .09);
+    }
+  }
+
+  /** Carbon and paint chips thrown from a heavy contact. */
+  spawnDebris(pos: THREE.Vector3, impulse: number): void {
+    const n = Math.min(12, 2 + Math.floor(impulse * .8));
+    for (let i = 0; i < n; i += 1) {
+      emit(this.debris, pos.x + (Math.random() - .5), pos.y + .5, pos.z + (Math.random() - .5),
+        (Math.random() - .5) * 7, 1.5 + Math.random() * 3, (Math.random() - .5) * 7, .25 + Math.random() * .3, .6 + Math.random() * .5);
     }
   }
 
@@ -271,7 +321,8 @@ export class VfxSystem {
         pool.positions[i * 3 + 1] += pool.velocities[i * 3 + 1] * dt;
         pool.positions[i * 3 + 2] += pool.velocities[i * 3 + 2] * dt;
         pool.velocities[i * 3] *= 1 - dt * 1.2;
-        if (pool === this.sparks) pool.velocities[i * 3 + 1] -= 9.8 * dt;
+        if (pool === this.sparks || pool === this.debris) pool.velocities[i * 3 + 1] -= 9.8 * dt;
+        else if (pool === this.spray) { pool.velocities[i * 3 + 1] -= 2.2 * dt; pool.velocities[i * 3] *= 1 - dt * 1.4; pool.velocities[i * 3 + 2] *= 1 - dt * 1.4; }
         else pool.velocities[i * 3 + 1] *= 1 - dt * 0.6;
         pool.velocities[i * 3 + 2] *= 1 - dt * 1.2;
         changed = true;

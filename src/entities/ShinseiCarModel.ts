@@ -12,7 +12,31 @@ export function preloadShinseiCarModel(): Promise<void> {
 }
 
 /** Owner-authored body and wheels, with baked Blender surfaces and game pivots. */
-export function createShinseiCarModel(): CarModel {
+/**
+ * Rival liveries: the crimson paint in the baked body texture is re-hued to the
+ * team colour in the shader, leaving carbon, metal, decals and wear untouched.
+ * Very dark liveries become graphite with the original saturation removed.
+ */
+function applyShinseiLivery(material: THREE.MeshStandardMaterial, primary: number): void {
+  const target = new THREE.Color(primary), hsl = { h: 0, s: 0, l: 0 };
+  target.getHSL(hsl);
+  const uniform = { value: new THREE.Vector3(hsl.h, Math.min(1, hsl.s * 1.05), hsl.l < .2 ? .42 : Math.min(1.35, .6 + hsl.l)) };
+  material.onBeforeCompile = shader => {
+    shader.uniforms.uLivery = uniform;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+      uniform vec3 uLivery;
+      vec3 liveryHsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-min(q.w,q.y);float e=1.0e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
+      vec3 liveryRgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      vec3 paint = liveryHsv(diffuseColor.rgb);
+      float red = (1. - smoothstep(.05, .1, min(paint.x, 1. - paint.x))) * smoothstep(.3, .5, paint.y);
+      vec3 recoloured = liveryRgb(vec3(uLivery.x, paint.y * uLivery.y, min(1., paint.z * uLivery.z)));
+      diffuseColor.rgb = mix(diffuseColor.rgb, recoloured, red);`);
+  };
+  material.customProgramCacheKey = () => `shinsei-livery-${primary.toString(16)}`;
+}
+
+export function createShinseiCarModel(livery: { primary?: number } = {}): CarModel {
   if (!source) throw new Error('Shinsei car must load before construction');
   const group = source.clone(true);
   group.name = 'car';
@@ -48,6 +72,8 @@ export function createShinseiCarModel(): CarModel {
       // game's bloom. Preserve small lamps without washing out the silhouette.
       const emission: Record<string, number> = { led_white: 3, led_red: 1.2, led_cyan: 1.8, led_amber: 1.6, underglow_blue: .65 };
       if (material.name in emission) material.emissiveIntensity = emission[material.name];
+      if (livery.primary !== undefined && ['Shinsei_BakedBody', 'Shinsei_WingWornCrimson'].includes(material.name)) applyShinseiLivery(material, livery.primary);
+      if (livery.primary !== undefined && material.name === 'Shinsei_WingPaint') material.color.setHex(livery.primary).multiplyScalar(.8);
       for (const map of [material.map, material.normalMap, material.roughnessMap]) {
         if (map) map.anisotropy = 8;
       }

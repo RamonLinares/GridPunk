@@ -22,7 +22,7 @@ import { CameraRig } from '../systems/CameraRig';
 import { LapReplayRecorder, capturePoses, applyPoses, replayMotion } from '../systems/LapReplay';
 import { ReplayDirector } from '../systems/ReplayDirector';
 import { collectReplayObstructions } from '../systems/ReplayVisibility';
-import { Hud } from '../systems/Hud';
+import { Hud, type HudStanding } from '../systems/Hud';
 import { Timing } from '../systems/Timing';
 import { readPersonalBest, savePersonalBest } from '../systems/PersonalBests';
 import { AudioSystem } from '../systems/AudioSystem';
@@ -33,6 +33,8 @@ import { PostProcessing } from '../systems/PostProcessing';
 import { MapOverlay } from '../systems/MapOverlay';
 import { DrivingGuide } from '../systems/DrivingGuide';
 import { VfxSystem } from '../systems/Vfx';
+import { CarEffects } from '../systems/CarEffects';
+import { LapDelta } from '../systems/LapDelta';
 import { QualityController, type QualityPreset } from '../systems/QualityController';
 export class Game {
     private readonly renderer: THREE.WebGLRenderer;
@@ -51,6 +53,9 @@ export class Game {
     private readonly audio = new AudioSystem('rain');
     private post!: PostProcessing;
     private vfx!: VfxSystem;
+    private carEffects!: CarEffects;
+    private lapDelta!: LapDelta;
+    private lastLapDelta: number | null = null;
     private guide!: DrivingGuide;
     private environmentMap?: THREE.WebGLRenderTarget;
     private readonly progressCache = { index: 0 };
@@ -265,6 +270,7 @@ export class Game {
             this.post.setAmbientOcclusionBounds(bounds);
         }
         this.vfx = new VfxSystem(this.scene, (x, z, referenceY) => this.builder.surfaceHeightAt(x, z, referenceY));
+        this.carEffects = new CarEffects(this.scene, this.vfx, [this.car, ...this.rivals.map(rival => rival.car)], this.spline.circuit.stage === 'cyberpunk');
         this.guide = new DrivingGuide(this.spline);
         this.scene.add(this.guide.group);
         // Every car gets the same ground contact treatment. The sun shadow can
@@ -565,6 +571,7 @@ export class Game {
         this.audio.dispose();
         this.hud.dispose();
         this.vfx.dispose();
+        this.carEffects.dispose();
         this.guide.dispose();
         this.post.dispose();
         this.environment.sunLighting.dispose();
@@ -583,6 +590,9 @@ export class Game {
         this.car.resetAt(slot.index, slot.lateral);
         this.timing.reset();
         this.personalBest = readPersonalBest(this.spline.circuitId);
+        this.lapDelta = new LapDelta(this.spline.length, this.spline.circuitId, this.personalBest);
+        this.lastLapDelta = null;
+        this.carEffects?.reset();
         this.newPersonalBest = false;
         this.countdown = 3.999;
         this.started = false;
@@ -687,6 +697,7 @@ export class Game {
         this.replay = { director: new ReplayDirector(lap, cars, this.camera, this.builder, obstructions), time: 0, playing: true, exporting: false,
             saved: capturePoses(cars, true), hidden, fov: this.camera.fov, cameraMode: this.cameraRig.mode };
         this.vfx.setVisible(false);
+        this.carEffects.setVisible(false);
         this.post.setCamera(this.camera);
         this.post.setCinematic(true);
         this.post.resetMotionHistory();
@@ -764,6 +775,8 @@ export class Game {
         for (const [o, visible] of saved.hidden)
             o.visible = visible;
         this.vfx.setVisible(true);
+        this.carEffects.setVisible(true);
+        this.carEffects.reset();
         this.audio.setPaused(true);
         this.post.setCinematic(false);
         this.cameraRig.mode = saved.cameraMode;
@@ -889,6 +902,7 @@ export class Game {
             this.cameraRig.addShake(0.5);
             this.lastCollisionSound = this.elapsed;
             this.vfx.spawnSparks(this.car.group.position, result.collisionImpulse);
+            if (result.collisionImpulse > 4) this.vfx.spawnDebris(this.car.group.position, result.collisionImpulse);
         }
         this.cameraRig.addShake(this.car.surfaceInfo.rumble * 0.02 * Math.min(1, telemetry.speed / 40));
         // Timing.
@@ -902,6 +916,7 @@ export class Game {
             const last = this.timing.lastLap;
             const record = this.timing.getHistory().at(-1);
             const personalBest = record?.valid && last !== null && (this.personalBest === null || last < this.personalBest);
+            this.lapDelta.completeLap(last, !!personalBest);
             if (personalBest && last !== null) {
                 this.personalBest = last;
                 this.newPersonalBest = true;
@@ -911,9 +926,16 @@ export class Game {
                 : personalBest ? 'PERSONAL BEST' : `LAP ${timingResult.lapCompleted}`;
             this.hud.showMessage(`${lapLabel}  ${last ? last.toFixed(3) : ''}`, 2.2, 'lap');
             this.audio.lapTone();
+            if (timingResult.lapCompleted === 2) window.setTimeout(() => { if (!this.finished) this.hud.showMessage('FINAL LAP', 1.8, 'final'); }, 2300);
         }
         if (timingResult.sectorCompleted !== null)
             this.audio.sectorTone();
+        // Distance from the line; the grid sits just behind it, before the first crossing.
+        if (this.started && this.timing.armed && progress < this.spline.length * .97) {
+            this.lapDelta.record(progress, this.timing.currentLapTime);
+            this.lastLapDelta = this.timing.lapValid && this.timing.armed ? this.lapDelta.delta(progress, this.timing.currentLapTime) : null;
+        }
+        else this.lastLapDelta = null;
         // AI rivals race the same track.
         const L = this.spline.length;
         // Signed shortest-path delta avoids spurious lap jumps when a car sits on
@@ -977,6 +999,10 @@ export class Game {
         }), delta, tunnelMix);
         this.vfx.spawnExhaust(this.car.group.position, this.car.group.quaternion, telemetry, delta);
         this.vfx.spawnTyreMarks(this.car, sliding, delta);
+        this.carEffects.update(delta, [
+            { car: this.car, wet: this.rainExposureAt(progress) * (1 - tunnelMix) },
+            ...this.rivals.map(rival => ({ car: rival.car, wet: this.rainExposureAt(rival.prev) * (1 - this.tunnelMixAt(rival.prev)) })),
+        ], this.camera, this.car);
         this.vfx.update(delta);
         this.updateContactShadows();
         // Camera + HUD.
@@ -1047,7 +1073,21 @@ export class Game {
             gap: Number.isFinite(gapAhead) ? gapAhead : 0,
             countdown: this.started ? 0 : this.countdown,
             proximity: leftClose && rightClose ? 'both' : leftClose ? 'left' : rightClose ? 'right' : 'none',
+            delta: this.lastLapDelta,
+            standings: this.started ? this.standings() : undefined,
         }, this.car.physics.position, this.car.physics.yaw, delta, this.rivals.map(rival => rival.car.physics.position));
+    }
+    /** Running order for the HUD tower; intervals convert race distance to time at the trailing car's speed. */
+    private standings(): HudStanding[] {
+        // Team codes and chips follow the rival liveries on the grid (the black #77 shows its red accent).
+        const teams: Record<number, [string, string]> = { 16: ['AKA', '#c0141d'], 4: ['MIZ', '#00a19c'], 55: ['ORA', '#ff6a00'], 77: ['KUR', '#ff2d2d'], 23: ['SHI', '#e8e8e4'] };
+        const entries = [
+            { code: 'YOU', number: 7, color: 'var(--accent)', race: this.playerRace, speed: this.car.physics.telemetry.speed, player: true },
+            ...this.rivals.map(rival => ({ code: teams[rival.number]?.[0] ?? 'RIV', number: rival.number, color: teams[rival.number]?.[1] ?? '#888',
+                race: rival.race, speed: rival.car.physics.telemetry.speed, player: false })),
+        ].sort((a, b) => b.race - a.race);
+        return entries.map((entry, i) => ({ code: entry.code, number: entry.number, color: entry.color, player: entry.player,
+            interval: i === 0 ? null : (entries[i - 1].race - entry.race) / Math.max(15, entry.speed) }));
     }
     private updateContactShadows(rendered = false): void {
         // Drape each contact shadow over the same rendered road/terrain surface
@@ -1287,6 +1327,7 @@ export class Game {
             this.audio.collision(contactImpulse);
             this.cameraRig.addShake(Math.min(.5, contactImpulse * .035));
             this.vfx.spawnSparks(this.car.group.position, contactImpulse);
+            if (contactImpulse > 4) this.vfx.spawnDebris(this.car.group.position, contactImpulse);
             this.lastCollisionSound = this.elapsed;
         }
         return { collided, collisionImpulse };

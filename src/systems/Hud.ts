@@ -27,7 +27,12 @@ export interface HudState {
     countdown?: number;
     /** Side(s) occupied by a nearby rival, used for a glanceable edge cue. */
     proximity?: HudProximity;
+    /** Seconds behind (+) or ahead (−) of the personal-best lap at this point. */
+    delta?: number | null;
+    /** Running order, leader first. Intervals are seconds to the car ahead. */
+    standings?: readonly HudStanding[];
 }
+export interface HudStanding { code: string; number: number; color: string; interval: number | null; player: boolean; }
 export class Hud {
     private readonly root = document.createElement('div');
     private readonly els: Record<string, HTMLElement> = {};
@@ -46,13 +51,17 @@ export class Hud {
     private readonly offsetX: number;
     private readonly offsetY: number;
     private messageTimer = 0;
+    private shownPosition = 0;
+    private positionTimer = 0;
+    private standingsTimer = 0;
     private mapTimer = 0;
     constructor(private readonly spline: TrackSpline) {
         this.root.id = 'hud-root';
         this.root.innerHTML = `
       <div class="race-identity"><span class="circuit-mark" aria-hidden="true">${spline.circuit.stage === 'solarpunk' ? '◢' : spline.circuit.stage === 'steampunk' ? '⚙' : '///'}</span><div><b>${spline.circuit.shortName.toUpperCase()}</b><span>${spline.circuit.stage === 'solarpunk' ? 'CLEAN ENERGY. A BRIGHTER TOMORROW.' : spline.circuit.stage === 'steampunk' ? 'FORGED IN FIRE. DRIVEN BY STEAM.' : spline.circuit.shortName.toUpperCase() + ' · SPRINT'}</span></div></div>
-      <div class="race-standing"><div class="position-readout"><span class="hud-label">POSITION</span><strong><b id="hud-position">1</b><small>/ 6</small></strong><span id="hud-gap" class="rival-gap"></span></div><div class="lap-readout"><span class="hud-label">LAP</span><strong><b id="hud-lap">1</b><small>/ 3</small></strong></div></div>
-      <div class="timing-tower"><div class="live-time"><span class="hud-label"><i></i><span id="hud-time-label" role="status">LAP TIME</span></span><strong id="hud-time">0:00.000</strong></div><div class="timing-row"><span>PERSONAL BEST</span><b id="hud-best">--:--.---</b></div><div class="timing-row"><span id="hud-last-label">LAST LAP</span><b id="hud-last">--:--.---</b></div><div class="sector-row"><span id="hud-sector-0">S1</span><span id="hud-sector-1">S2</span><span id="hud-sector-2">S3</span></div></div>
+      <div class="race-standing"><div class="position-readout"><span class="hud-label">POSITION</span><strong><b id="hud-position">1</b><small>/ 6</small></strong><span id="hud-gap" class="rival-gap"></span><span class="position-change" id="hud-position-change" aria-hidden="true"></span></div><div class="lap-readout"><span class="hud-label">LAP</span><strong><b id="hud-lap">1</b><small>/ 3</small></strong></div></div>
+      <div class="timing-tower"><div class="live-time"><span class="hud-label"><i></i><span id="hud-time-label" role="status">LAP TIME</span></span><strong id="hud-time">0:00.000</strong><span class="lap-delta" id="hud-delta" hidden><small>VS PB</small><b id="hud-delta-value">+0.000</b></span></div><div class="timing-row"><span>PERSONAL BEST</span><b id="hud-best">--:--.---</b></div><div class="timing-row"><span id="hud-last-label">LAST LAP</span><b id="hud-last">--:--.---</b></div><div class="sector-row"><span id="hud-sector-0">S1</span><span id="hud-sector-1">S2</span><span id="hud-sector-2">S3</span></div></div>
+      <ol class="standings" id="hud-standings" aria-label="Running order">${Array.from({ length: 6 }, (_, i) => `<li><b>${i + 1}</b><i></i><span></span><em></em></li>`).join('')}</ol>
       <div class="start-lights" id="hud-start-lights" aria-label="Starting lights" aria-hidden="true">${Array.from({ length: 5 }, () => '<i></i>').join('')}</div>
       <div class="hud-proximity" id="hud-proximity" aria-hidden="true"><i class="proximity-left" aria-hidden="true"></i><i class="proximity-right" aria-hidden="true"></i></div>
       <div class="hud-warning" id="hud-warning">TRACK LIMITS <span>Ease off · rejoin safely</span></div>
@@ -134,6 +143,26 @@ export class Hud {
         e['hud-best'].textContent = formatTime(state.bestLap);
         e['hud-lap'].textContent = Math.min(3, state.lap).toString();
         e['hud-position'].textContent = state.position.toString();
+        // Position changes pulse the readout with a direction chevron.
+        if (this.shownPosition && state.position !== this.shownPosition && (state.countdown ?? 0) <= 0) {
+            const gained = state.position < this.shownPosition;
+            e['hud-position-change'].textContent = gained ? '▲' : '▼';
+            this.root.classList.remove('position-gained', 'position-lost');
+            void this.root.offsetWidth;
+            this.root.classList.add(gained ? 'position-gained' : 'position-lost');
+            this.positionTimer = 1.4;
+        }
+        this.shownPosition = state.position;
+        if (this.positionTimer > 0 && (this.positionTimer -= dt) <= 0) this.root.classList.remove('position-gained', 'position-lost');
+        const delta = state.delta;
+        e['hud-delta'].hidden = delta == null;
+        if (delta != null) {
+            e['hud-delta-value'].textContent = `${delta < 0 ? '−' : '+'}${Math.abs(delta).toFixed(3)}`;
+            e['hud-delta'].dataset.trend = delta < -.005 ? 'ahead' : delta > .005 ? 'behind' : 'level';
+        }
+        this.root.classList.toggle('race-live', !!state.standings);
+        this.standingsTimer -= dt;
+        if (state.standings && this.standingsTimer <= 0) { this.renderStandings(state.standings); this.standingsTimer = .25; }
         const lapInvalid = state.lapValid === false;
         const lastInvalid = state.lastLapValid === false;
         const timeLabel = lapInvalid ? 'LAP TIME · INVALID' : 'LAP TIME';
@@ -179,6 +208,19 @@ export class Hud {
             if (this.messageTimer <= 0)
                 e['hud-message'].classList.remove('show');
         }
+    }
+    private renderStandings(standings: readonly HudStanding[]): void {
+        const rows = this.els['hud-standings'].children;
+        standings.forEach((entry, i) => {
+            const row = rows[i] as HTMLElement | undefined;
+            if (!row) return;
+            row.classList.toggle('player', entry.player);
+            (row.children[1] as HTMLElement).style.background = entry.color;
+            const label = entry.player ? 'YOU' : `${entry.code} ${String(entry.number).padStart(2, '0')}`;
+            if (row.children[2].textContent !== label) row.children[2].textContent = label;
+            const interval = i === 0 ? 'LEADER' : entry.interval == null ? '' : entry.interval > 99 ? '+99.9' : `+${entry.interval.toFixed(1)}`;
+            if (row.children[3].textContent !== interval) row.children[3].textContent = interval;
+        });
     }
     private updateStartLights(countdown: number | undefined): void {
         const el = this.els['hud-start-lights'];
