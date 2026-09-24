@@ -9,10 +9,11 @@ Select **Kairo Steam** in the session menu or open `/?circuit=steam`. This is a 
 - **Clockworks**, around 20% of the lap: a four-face clock tower with moving hands, giant brass flywheels and supporting structures.
 - **Boiler Works**, around 55.2%: copper pressure vessels, manifold pipes, twin banded chimneys and roof steam.
 - **Royal Kairo Aerodrome**, around 75.6%: a roofed industrial hangar, mooring gantry and mechanical winches.
+- **Brass & Co.**, around 40%: a fully modelled engine house (`src/game/SteamBrassWorks.ts`) on its own railed, cobbled plaza. A black-iron entrance pavilion carries a clockwork rose window with turning gears, the BRASS & CO. nameboard and a glazed fan arch between lantern-topped pylons. Behind it a brick hall has a ribbed glass barrel vault with a ridge walkway. Also: a copper FUEL / POWER / PROGRESS boiler whose main arches over into a header drum, twin banded smoke stacks, a STEAM / PEOPLE / PURPOSE tank on a cantilevered balcony, a domed weather-vane tower, a flywheel gantry with an external stair, a jib crane with cargo, gas lamps and a hand cart. Metalwork uses a riveted-plate detail projected in metres; the whole landmark is merged into about 25 draws.
 - High pipe gantries cross the road, two cargo dirigibles drift above the city, and street-mounted flywheels turn on factory walls.
 - Warm sunset lighting, dry worn asphalt, brown shoulders, sandstone barriers, gear-emblem sponsors, a brass-lettered start/finish sign and a brass HUD. The Shinsei wears Kairo Steam wing plates and a warmer metal finish.
 
-The road clearance checks cover the entire loop, including return lanes. The three reserved landmark footprints leave approximately 20 m to the centreline; their approach corridors are kept clear of ordinary buildings. Pipe gantry supports are at least 16 m from any centreline segment, with overhead components above 12 m. Static scenery is cosmetic; the established barriers and driving surface remain the gameplay boundary.
+The road clearance checks cover the entire loop, including return lanes. The four reserved landmark footprints leave approximately 20 m to the centreline; their approach corridors are kept clear of ordinary buildings. Pipe gantry supports are at least 16 m from any centreline segment, with overhead components above 12 m. Static scenery is cosmetic; the established barriers and driving surface remain the gameplay boundary.
 
 ## Source and implementation
 

@@ -36,9 +36,10 @@ try {
         gearsMove: gears.every((o, i) => o.rotation.z !== initial[i]), shipsMove: ships.every((o, i) => o.position.distanceTo(initialShip[i]) > 1),
         steamTime: root.getObjectByName('steam-plumes').material.uniforms.time.value,
         steamVisible: root.getObjectByName('steam-plumes').visible,
+        brassWorks: g.scene.getObjectByName('steam-brassworks')?.visible === true,
         solarPresent: !!g.scene.getObjectByName('solar-city'), rain: g.rainExposureAt(0), meshes, instances, triangles, geometries: geometries.size, materials: materials.size };
     });
-    assert.equal(model.circuit, 'steam'); assert.equal(model.corners, 18); assert.equal(model.landmarks.length, 3);
+    assert.equal(model.circuit, 'steam'); assert.equal(model.corners, 18); assert.equal(model.landmarks.length, 4); assert.ok(model.brassWorks);
     assert.ok(model.gearsMove && model.shipsMove && model.gearsVisible && model.clockFacesVisible); assert.equal(model.steamTime, 60); assert.equal(model.rain, 0); assert.equal(model.solarPresent, false);
     model.landmarks.forEach(site => assert.ok(site.clearance >= 17));
     assert.ok(model.steamVisible && model.pressureVents > 0 && model.facadeGears < 20);

@@ -6,6 +6,7 @@ import { SunLighting } from '../systems/SunLighting';
 import { createSteamMaterials } from './SteamMaterials';
 import { createSteamBuildingKit } from './SteamBuildings';
 import { createSteamPlumes, type PressureVent } from './SteamPlumes';
+import { createBrassWorks } from './SteamBrassWorks';
 import { grandstandTrackClearance } from './SolarGrandstand';
 
 type Site = { x: number; z: number; r: number; angle: number; progress: number; kind: string };
@@ -38,7 +39,8 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
   };
   const clearance = grandstandTrackClearance(spline.samples);
   const occupied: { x: number; z: number; r: number }[] = [], sites: Site[] = [];
-  for (const spec of [{ kind: 'clockworks', progress: .20, r: 27 }, { kind: 'boilerworks', progress: .552, r: 35 }, { kind: 'aerodrome', progress: .756, r: 36 }]) {
+  for (const spec of [{ kind: 'clockworks', progress: .20, r: 27 }, { kind: 'boilerworks', progress: .552, r: 35 }, { kind: 'aerodrome', progress: .756, r: 36 }, // Brass & Co. closes a long straight: the back straight on Kairo, the start straight on Neon.
+    { kind: 'brassworks', progress: spline.circuit.layout === 'neon' ? .10 : .40, r: 31 }]) {
     let found = false;
     for (const shift of [0, .015, -.015, .03]) {
       if (found) break;
@@ -96,8 +98,18 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
   numerals.forEach((n, i) => { const a = i * Math.PI / 6; cc.fillText(n, 256 + Math.sin(a) * 185, 256 - Math.cos(a) * 185); });
   const clockMat = new THREE.MeshStandardMaterial({ map: m.texture(clockCanvas), roughness: .7 });
   const disk = new THREE.CircleGeometry(1, 48);
-  // Three authored districts establish different visual beats through the lap.
+  let brassWorks: ReturnType<typeof createBrassWorks> | undefined;
+  // Authored districts establish different visual beats through the lap.
   for (const site of sites) {
+    if (site.kind === 'brassworks') {
+      // Brass & Co. is a fully modelled set piece with its own plaza.
+      brassWorks = createBrassWorks(m);
+      brassWorks.root.position.set(site.x, 0, site.z); brassWorks.root.rotation.y = site.angle;
+      group.add(brassWorks.root); brassWorks.root.updateMatrixWorld(true);
+      for (const vent of brassWorks.vents) vents.push(brassWorks.root.localToWorld(vent.clone()));
+      animated.push(...brassWorks.gears);
+      continue;
+    }
     const rawLocal = localKit(site.x, site.z, site.angle), heightScale = site.kind === 'clockworks' ? .75 : 1;
     const local: typeof rawLocal = (geo, mat, u, y, v, w, h, d, rotation) => rawLocal(geo, mat, u, y * heightScale, v, w, h * heightScale, d, rotation);
     local(cylinder, m.stone, 0, .4, 0, site.r - 1, .8, site.r - 1);
@@ -323,7 +335,8 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
       skyMat.uniforms.uSun.value.copy(enabled ? goldenSun : new THREE.Vector3(-.6, .5, .4).normalize()); skyMat.uniforms.uCine.value = enabled ? 1 : 0;
       steamMaterial.uniforms.uSun.value.copy(goldenSun); steamMaterial.uniforms.uCine.value = enabled ? 1 : 0;
       m.lamp.emissiveIntensity = enabled ? 3.4 : 1.2;
+      brassWorks?.setCinematic(enabled);
       scene.userData.cinematicSun = enabled ? goldenSun : undefined;
     },
-    disposeExtraResources: () => m.dispose() };
+    disposeExtraResources: () => { m.dispose(); brassWorks?.dispose(); } };
 }
