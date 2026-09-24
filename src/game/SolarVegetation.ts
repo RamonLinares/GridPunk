@@ -34,7 +34,10 @@ export function createSolarVegetation(parent: THREE.Group, random: () => number)
   const spray = (x: number, y: number, z: number, sx: number, sy: number, angle = random() * Math.PI * 2) => {
     d.position.set(x,y,z); d.rotation.set((random() - .5) * 1.5, angle, (random() - .5) * .7); d.scale.set(sx,sy,1); d.updateMatrix(); leaves.push(d.matrix.clone());
   };
+  // Where each plant attaches (trunk foot, vine top, shrub base): kept for layout audits.
+  const anchors: number[] = [];
   const tree = (x: number, y: number, z: number, s = 1) => {
+    anchors.push(0, x, y, z);
     const root = new THREE.Vector3(x,y,z), fork = new THREE.Vector3(x+.1*s,y+3.6*s,z);
     branch(root,fork,.21*s);
     for(let b=0;b<7;b++) {
@@ -48,6 +51,7 @@ export function createSolarVegetation(parent: THREE.Group, random: () => number)
     }
   };
   const drape = (x: number, y: number, z: number, width: number, height: number, angle: number) => {
+    anchors.push(1, x, y, z);
     for(let u=-width/2;u<width/2;u+=.85) {
       const drop=height*(.3+random()*.7);
       for(let v=0;v<drop;v+=.85) {
@@ -56,6 +60,7 @@ export function createSolarVegetation(parent: THREE.Group, random: () => number)
     }
   };
   const shrub = (x:number,y:number,z:number,s=1) => {
+    anchors.push(2, x, y, z);
     for(let k=0;k<5;k++) spray(x+(random()-.5)*s,y+random()*.6*s,z+(random()-.5)*s,1.5*s,1.25*s);
   };
   const finish = () => {
@@ -74,5 +79,6 @@ export function createSolarVegetation(parent: THREE.Group, random: () => number)
     submit(leaves,new THREE.PlaneGeometry(1,1),leafMaterial,'solar-leaf-sprays');
     submit(branches,new THREE.CylinderGeometry(.6,1,1,6),bark,'solar-tree-branches');
   };
+  parent.userData.vegetationAnchors = anchors;
   return {tree,drape,shrub,finish,dispose:()=>map.dispose()};
 }

@@ -177,15 +177,15 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
           if (near) {
             for (let k = 0; k < 3; k++) {
               const p = world(t.u + (rand() - .5) * t.w * .86, t.v + t.d / 2 + 1.1);
-              vegetation.drape(p.x, y + .85, p.z, 1.5 + rand() * 2.5, 1.4 + rand() * 3, angle);
+              vegetation.drape(p.x, y + .85 + ground, p.z, 1.5 + rand() * 2.5, 1.4 + rand() * 3, angle);
             }
             const p = world(t.u + t.w / 2 + 1.1, t.v + (rand() - .5) * t.d);
-            vegetation.drape(p.x, y + .8, p.z, 3, 2.5, angle + Math.PI / 2);
+            vegetation.drape(p.x, y + .8 + ground, p.z, 3, 2.5, angle + Math.PI / 2);
           }
         }
         if (livingWall && near) {
           const p = world(t.u - t.w * .3, t.v + t.d / 2 + .5);
-          vegetation.drape(p.x,t.bottom+t.h,p.z,t.w*.25,t.h,angle);
+          vegetation.drape(p.x,t.bottom+t.h+ground,p.z,t.w*.25,t.h,angle);
         }
       }
       // Top tier carries the solar array, tilted to the sun.
@@ -200,7 +200,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
         // Lower terraces are gardens: trees on the exposed step-back.
         const next = tiers[index + 1];
         const front = next.v + next.d / 2, side = next.u + next.w / 2;
-        const y = t.bottom + t.h + .44;
+        const y = t.bottom + t.h + .44 + ground;
         const a = world(t.u + (rand() - .5) * t.w * .7, (front + t.v + t.d / 2) / 2);
         tree(a.x, y, a.z, .5 + rand() * .3);
         const b = world((side + t.u + t.w / 2) / 2, t.v + (rand() - .5) * t.d * .6);
@@ -211,9 +211,10 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const mesh = new THREE.Mesh(sloganGeometry, sloganMaterials[Math.floor(rand() * sloganMaterials.length)]);
       mesh.name = 'solar-facade-slogan';
       const p = world(-w * .29, d / 2 + .32);
-      mesh.position.set(p.x, Math.min(podium - 1, 8) + 2, p.z); mesh.rotation.y = angle;
+      const sloganY = Math.min(podium - 1, 8) + 2;
+      mesh.position.set(p.x, sloganY + ground, p.z); mesh.rotation.y = angle;
       // Keep each printed slogan on its own solid panel over the windowed core.
-      local(wall, -w * .29, mesh.position.y, d / 2 + .306, 5.4, 10.6, .018);
+      local(wall, -w * .29, sloganY, d / 2 + .306, 5.4, 10.6, .018);
       group.add(mesh);
     }
     if (near) {
