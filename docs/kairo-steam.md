@@ -4,8 +4,19 @@ Select **Kairo Steam** in the session menu or open `/?circuit=steam`. This is a 
 
 ## World and identity
 
-- Six building families: staggered terraced townhouses with dormers and chimney pots, sawtooth foundries with glazed northlights, barrel-vaulted glass markets, stepped commercial exchanges, copper-domed observatories, and brick mills with stair towers. Limestone sash windows, soot-brick industrial glazing, and redbrick arches cover all elevations.
-- Roof and street furnishings include 60 braced water towers, 31 loading cranes with suspended cargo, 60 fire escapes, 61 workshop boiler banks with valve wheels, copper awnings, and six printed business signs. Existing chimney steam, downpipes and gas lanterns remain.
+- **Street set pieces.** Every building fronting the track is one of eight modelled archetypes (`src/game/SteamStreetBuildings.ts`), cycled so neighbours differ:
+  - Guild of Engineers clock hall
+  - Kairo Gasworks with a lattice-framed gasholder
+  - Pumping Station No. 3 with a beam engine, turning flywheel and banded stack
+  - Royal Observatory with a telescope and orrery
+  - Airship Chandlery with a mooring mast and moored dirigible
+  - Kairo Gazette printing works with a rose window, sawtooth roof and water tank
+  - Bank of Kairo with a portico and dome
+  - Kairo Railway Depot with a locomotive and water tower
+
+  They share Brass & Co.'s vocabulary through `src/game/SteamKit.ts`. Each archetype is instanced once per material, and its metals are folded into one vertex-coloured riveted material. Within 220 m an instance shows full detail and casts shadows. From 220 m to 1 km it uses an automatic massing LOD (parts at least 3.6 m across), without shadows. Beyond 1 km the skyline covers it.
+- Skyline: six building families behind the street: staggered terraced townhouses with dormers and chimney pots, sawtooth foundries with glazed northlights, barrel-vaulted glass markets, stepped commercial exchanges, copper-domed observatories, and brick mills with stair towers. Limestone sash windows, soot-brick industrial glazing, and redbrick arches cover all elevations.
+- Street furniture: gas lanterns and copper water mains line the verges, and chimney steam rises across the district.
 - **Clockworks**, around 20% of the lap: a four-face clock tower with moving hands, giant brass flywheels and supporting structures.
 - **Boiler Works**, around 55.2%: copper pressure vessels, manifold pipes, twin banded chimneys and roof steam.
 - **Royal Kairo Aerodrome**, around 75.6%: a roofed industrial hangar, mooring gantry and mechanical winches.

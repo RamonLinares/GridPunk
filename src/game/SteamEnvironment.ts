@@ -7,6 +7,8 @@ import { createSteamMaterials } from './SteamMaterials';
 import { createSteamBuildingKit } from './SteamBuildings';
 import { createSteamPlumes, type PressureVent } from './SteamPlumes';
 import { createBrassWorks } from './SteamBrassWorks';
+import { createSteamKit } from './SteamKit';
+import { createSteamStreetBuildings } from './SteamStreetBuildings';
 import { grandstandTrackClearance } from './SolarGrandstand';
 
 type Site = { x: number; z: number; r: number; angle: number; progress: number; kind: string };
@@ -15,7 +17,7 @@ type Site = { x: number; z: number; r: number; angle: number; progress: number; 
 export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder, camera: THREE.PerspectiveCamera): EnvironmentHandles {
   const group = new THREE.Group(); group.name = 'steam-city'; group.userData.sceneryContainer = true; scene.add(group);
   scene.userData.daylight = true; scene.userData.steam = true;
-  const m = createSteamMaterials(), spline = builder.spline;
+  const m = createSteamMaterials(), kit = createSteamKit(m), spline = builder.spline;
   let seed = 1886;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   const box = new THREE.BoxGeometry(1, 1, 1), cylinder = new THREE.CylinderGeometry(1, 1, 1, 12);
@@ -66,7 +68,6 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     return Math.hypot(x - approach.x - t * dx, z - approach.z - t * dz) < radius + 9;
   });
   const vents: THREE.Vector3[] = [], pressureVents: PressureVent[] = [];
-  let industrialFronts = 0, facadeGears = 0;
   const animated: { root: THREE.Object3D; rate: number; phase?: number }[] = [];
   const gearShape = new THREE.Shape();
   for (let k = 0; k <= 96; k++) {
@@ -103,7 +104,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
   for (const site of sites) {
     if (site.kind === 'brassworks') {
       // Brass & Co. is a fully modelled set piece with its own plaza.
-      brassWorks = createBrassWorks(m);
+      brassWorks = createBrassWorks(m, kit);
       brassWorks.root.position.set(site.x, 0, site.z); brassWorks.root.rotation.y = site.angle;
       group.add(brassWorks.root); brassWorks.root.updateMatrixWorld(true);
       for (const vent of brassWorks.vents) vents.push(brassWorks.root.localToWorld(vent.clone()));
@@ -169,58 +170,43 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     }
   }
   const buildingKit = createSteamBuildingKit(m, { box, cylinder, sphere, cone, ring });
-  const shopSigns = [
-    sign('COPPER & SONS', 'INSTRUMENTS  /  REPAIRS'), sign('IRONWORKS', 'FOUNDRY  /  MACHINE SHOP'),
-    sign('GRAND MARKET', 'TRADERS  /  PROVISIONS'), sign('ROYAL EXCHANGE', 'GUILD OF ENGINEERS'),
-    sign('OBSERVATORY', 'CELESTIAL NAVIGATION'), sign('KAIRO TEXTILES', 'ESTABLISHED 1846'),
-  ];
   const buildingFootprints: { x: number; z: number; r: number; style: number; near: boolean }[] = [];
-  // Six silhouette families share the same road-safe placement and cell-based instancing.
-  const building = (x: number, z: number, w: number, d: number, h: number, angle: number, near: boolean) => {
+  // Skyline blocks: six silhouette families behind the street, cell-instanced.
+  const building = (x: number, z: number, w: number, d: number, h: number, angle: number) => {
     const r = Math.hypot(w, d) / 2 + 2;
     if (reserved(x, z, r) || clearance(x, z) < r + 15 || occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + r + 2)) return;
     const index = buildingFootprints.length, style = index % 6;
-    occupied.push({ x, z, r }); buildingFootprints.push({ x, z, r, style, near });
+    occupied.push({ x, z, r }); buildingFootprints.push({ x, z, r, style, near: false });
     const local = localKit(x, z, angle);
-    const { roofHeight } = buildingKit.build(local, w, d, h, index, near);
+    const { roofHeight } = buildingKit.build(local, w, d, h, index, false);
     if (style === 1 || style === 5) {
       const chimneyHeight = 10 + rand() * 14, u = w * .30, v = -d * .27;
       local(cylinder, m.brick, u, roofHeight + chimneyHeight / 2, v, 1.2, chimneyHeight, 1.2);
       for (const y of [roofHeight + 2, roofHeight + chimneyHeight - .3]) local(cylinder, m.iron, u, y, v, 1.45, .6, 1.45);
-      if (near) vents.push(new THREE.Vector3(u, roofHeight + chimneyHeight + .5, v).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle).add(new THREE.Vector3(x, 0, z)));
-    }
-    if (near) {
-      local(plane, shopSigns[style], 0, style === 0 ? 5.2 : 7, d / 2 + .42, Math.min(13, w - 3), 2.2, 1);
-      if (style === 1 || style === 5) {
-        const industrialIndex = industrialFronts++;
-        if (industrialIndex % 3 === 0) {
-          const origin = new THREE.Vector3(0, 5.7, d / 2 + .7).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle).add(new THREE.Vector3(x, 0, z));
-          pressureVents.push({ origin, alongFacade: new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle)) });
-          // The pressure release has a physical outlet above the workshop awning.
-          local(cylinder, m.copper, 0, 5.25, d / 2 + .7, .24, .9, .24);
-          local(cylinder, m.brass, 0, 5.72, d / 2 + .7, .35, .12, .35);
-        }
-        // A few working factories carry flywheels; most facades show their architecture.
-        if (industrialIndex % 6 !== 0) return;
-        facadeGears++;
-        const y = Math.min(roofHeight * .67, 13);
-        const p = new THREE.Vector3(-w * .18, y, d / 2 + .8).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle).add(new THREE.Vector3(x, 0, z));
-        gear(p.x, p.y, p.z, 2.6, angle, style === 1 ? .13 : -.10);
-        local(box, m.iron, -w * .18, y, d / 2 + .3, 5.7, 5.7, .5);
-      }
     }
   };
+  // The street itself is lined with characterful set pieces; the plain
+  // silhouette families below fill the skyline behind them.
+  const street = createSteamStreetBuildings(m, kit);
+  const streetOrder = [0, 4, 2, 6, 1, 5, 3, 7];
+  let streetIndex = 0;
   for (let i = 0; i < spline.count; i += 10) {
     const s = spline.sampleAt(i);
     for (const side of [-1, 1]) {
-      const w = 16 + rand() * 12, d = 16 + rand() * 9, r = Math.hypot(w, d) / 2 + 2;
-      const p = s.position.clone().addScaledVector(s.right, side * (r + 17));
-      building(p.x, p.z, w, d, 17 + rand() * 25, Math.atan2(-side * s.right.x, -side * s.right.z), true);
+      const style = streetOrder[streetIndex % streetOrder.length], r = street.archetypes[style].r;
+      const p = s.position.clone().addScaledVector(s.right, side * (r + 17)), angle = Math.atan2(-side * s.right.x, -side * s.right.z);
+      if (reserved(p.x, p.z, r) || clearance(p.x, p.z) < r + 15 || occupied.some(o => Math.hypot(p.x - o.x, p.z - o.z) < o.r + r + 2)) continue;
+      occupied.push({ x: p.x, z: p.z, r }); buildingFootprints.push({ x: p.x, z: p.z, r, style: 6 + style, near: true });
+      const { vents: stacks, valves } = street.place(style, p.x, p.z, angle);
+      vents.push(...stacks); pressureVents.push(...valves);
+      streetIndex++;
     }
   }
+  const streetMeshes = street.build(group);
+  group.userData.streetPlacements = street.placed;
   const bounds = new THREE.Box3().setFromPoints(spline.samples.map(s => s.position));
   for (let x = bounds.min.x - 260; x < bounds.max.x + 260; x += 86) for (let z = bounds.min.z - 260; z < bounds.max.z + 260; z += 86)
-    building(x + rand() * 20, z + rand() * 20, 24 + rand() * 18, 22 + rand() * 20, 18 + rand() * 47, 0, false);
+    building(x + rand() * 20, z + rand() * 20, 24 + rand() * 18, 22 + rand() * 20, 18 + rand() * 47, 0);
   group.userData.buildingFootprints = buildingFootprints;
   // Gas lanterns and copper water mains follow the verges, with full return-lane clearance.
   for (let i = 0; i < spline.count; i += 9) {
@@ -307,11 +293,13 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2600, 32, 16), skyMat); sky.name = 'steam-sky'; sky.frustumCulled = false; group.add(sky);
   const hemisphere = new THREE.HemisphereLight(0xd1dadd, 0x806445, 1.35); group.add(hemisphere);
   const sunLighting = new SunLighting({ camera, parent: group, color: 0xffdbac, intensity: 3.3, sunDirection: daySun, range: 520, splits: [42, 150], shadowMapSize: 2048 });
-  group.userData.scenery = { buildings: occupied.length - sites.length, vents: vents.length, pressureVents: pressureVents.length, steamParticles: steam.userData.particles, facadeGears, animatedGears: animated.length, airships: airships.length, buildingStyles: buildingKit.styles, features: buildingKit.features };
+  group.userData.scenery = { streetBuildings: Object.fromEntries(street.archetypes.map((a, i) => [a.name, street.placed.filter(p => p.style === i).length])),
+    buildings: occupied.length - sites.length, vents: vents.length, pressureVents: pressureVents.length, steamParticles: steam.userData.particles, animatedGears: animated.length, streetGears: streetMeshes.gears, airships: airships.length, buildingStyles: buildingKit.styles, features: buildingKit.features };
   const update = (focus?: THREE.Vector3, seconds = 0) => {
     if (focus) sky.position.copy(focus);
     skyMat.uniforms.time.value = seconds; steamMaterial.uniforms.time.value = seconds;
     for (const item of animated) item.root.rotation.z = (item.phase ?? 0) + seconds * item.rate;
+    streetMeshes.update(seconds, focus);
     for (const ship of airships) {
       const phase = seconds * .008 + ship.phase;
       ship.root.position.copy(ship.anchor).add(new THREE.Vector3(Math.sin(phase) * 45, Math.sin(phase * 1.3) * 2, Math.cos(phase) * 20));
@@ -335,8 +323,8 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
       skyMat.uniforms.uSun.value.copy(enabled ? goldenSun : new THREE.Vector3(-.6, .5, .4).normalize()); skyMat.uniforms.uCine.value = enabled ? 1 : 0;
       steamMaterial.uniforms.uSun.value.copy(goldenSun); steamMaterial.uniforms.uCine.value = enabled ? 1 : 0;
       m.lamp.emissiveIntensity = enabled ? 3.4 : 1.2;
-      brassWorks?.setCinematic(enabled);
+      kit.setCinematic(enabled);
       scene.userData.cinematicSun = enabled ? goldenSun : undefined;
     },
-    disposeExtraResources: () => { m.dispose(); brassWorks?.dispose(); } };
+    disposeExtraResources: () => { m.dispose(); kit.dispose(); street.dispose(); } };
 }

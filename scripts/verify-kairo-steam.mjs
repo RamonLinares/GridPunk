@@ -42,9 +42,10 @@ try {
     assert.equal(model.circuit, 'steam'); assert.equal(model.corners, 18); assert.equal(model.landmarks.length, 4); assert.ok(model.brassWorks);
     assert.ok(model.gearsMove && model.shipsMove && model.gearsVisible && model.clockFacesVisible); assert.equal(model.steamTime, 60); assert.equal(model.rain, 0); assert.equal(model.solarPresent, false);
     model.landmarks.forEach(site => assert.ok(site.clearance >= 17));
-    assert.ok(model.steamVisible && model.pressureVents > 0 && model.facadeGears < 20);
-    assert.ok(model.minimumBuildingClearance >= 15); assert.equal(model.roadsideStyles.length, 6);
-    for (const feature of ['water-towers', 'loading-cranes', 'fire-escapes', 'workshop-boilers', 'copper-domes', 'glass-vaults']) assert.ok(model.features[feature] > 0);
+    assert.ok(model.steamVisible && model.pressureVents > 0 && model.streetGears > 0);
+    assert.ok(model.minimumBuildingClearance >= 15); assert.equal(model.roadsideStyles.length, 8);
+    assert.equal(Object.keys(model.streetBuildings).length, 8); Object.values(model.streetBuildings).forEach(count => assert.ok(count > 0));
+    for (const feature of ['copper-domes', 'glass-vaults', 'sawtooth-roofs', 'mill-towers']) assert.ok(model.features[feature] > 0);
     const captures = [];
     for (const fraction of (mobile ? [.182, .534, .738, .84] : [0, .10, .182, .32, .42, .534, .64, .738, .84, .90])) {
       const stats = await page.evaluate(f => {

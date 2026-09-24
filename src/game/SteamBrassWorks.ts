@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { createSteamMaterials } from './SteamMaterials';
+import type { SteamKit, V3 } from './SteamKit';
 
 type Materials = ReturnType<typeof createSteamMaterials>;
-type V3 = [number, number, number];
 
 /**
  * Brass & Co.: a riveted iron-and-brick engine house with a glazed barrel
@@ -12,99 +11,19 @@ type V3 = [number, number, number];
  *
  * Local frame: +z faces the road, +x runs along the frontage, y is up from the
  * plaza kerb. Everything stays within 30 m of the origin. Parts are merged per
- * material, so the whole landmark costs a couple of dozen draws.
+ * material (see SteamKit), so the whole landmark costs a couple of dozen draws.
  */
-export function createBrassWorks(m: Materials) {
+export function createBrassWorks(m: Materials, kit: SteamKit) {
   const root = new THREE.Group(); root.name = 'steam-brassworks';
   root.userData.roadClearanceVerified = true;
 
-  // ------------------------------------------------------------ Materials
-  const iron = new THREE.MeshStandardMaterial({ name: 'brassworks-black-iron', color: 0x2a2b2d, metalness: .72, roughness: .46 });
-  const brass = new THREE.MeshStandardMaterial({ name: 'brassworks-brass', color: 0xc9a25a, metalness: .85, roughness: .34 });
-  const copper = new THREE.MeshStandardMaterial({ name: 'brassworks-copper', color: 0xb96a3b, metalness: .82, roughness: .36 });
-  const bronze = new THREE.MeshStandardMaterial({ name: 'brassworks-bronze', color: 0x6d5337, metalness: .78, roughness: .42 });
-  const glass = new THREE.MeshStandardMaterial({ name: 'brassworks-vault-glass', color: 0x4d5d6c, metalness: .82, roughness: .16 });
-  const warmGlass = new THREE.MeshStandardMaterial({ name: 'brassworks-warm-glass', color: 0x4a4436, emissive: 0xb86f28, emissiveIntensity: .18, metalness: .5, roughness: .22 });
-  const glow = new THREE.MeshStandardMaterial({ name: 'brassworks-window-glow', color: 0xffc77a, emissive: 0xff9c3d, emissiveIntensity: .9, roughness: .5 });
-  const paving = new THREE.MeshStandardMaterial({ name: 'brassworks-paving', color: 0x8a847a, roughness: .92 });
-  const wood = new THREE.MeshStandardMaterial({ name: 'brassworks-crate-wood', color: 0x6a4a2e, roughness: .85 });
-  const materials = [iron, brass, copper, bronze, glass, warmGlass, glow, paving, wood];
-
-  // Riveted plate: seams, rivet rows and soot streaks, projected along the
-  // building's axes in metres so tanks, stacks and pylons share one scale.
-  const plateCanvas = document.createElement('canvas'); plateCanvas.width = plateCanvas.height = 512;
-  const pc = plateCanvas.getContext('2d')!;
-  pc.fillStyle = '#c8c8c8'; pc.fillRect(0, 0, 512, 512);
-  let noise = 7;
-  const rnd = () => { noise = (Math.imul(noise, 1103515245) + 12345) >>> 0; return noise / 4294967296; };
-  for (let i = 0; i < 900; i++) {
-    const x = rnd() * 512, y = rnd() * 512, v = 150 + rnd() * 90;
-    pc.fillStyle = `rgba(${v},${v},${v},.35)`; pc.fillRect(x, y, 2 + rnd() * 30, 1 + rnd() * 3);
-  }
-  for (let i = 0; i < 70; i++) {
-    const x = rnd() * 512, y = rnd() * 512, g = pc.createLinearGradient(0, y, 0, y + 180);
-    g.addColorStop(0, 'rgba(40,36,30,.35)'); g.addColorStop(1, 'rgba(40,36,30,0)');
-    pc.fillStyle = g; pc.fillRect(x, y, 3 + rnd() * 10, 180);
-  }
-  for (let row = 0; row < 4; row++) for (let col = 0; col < 2; col++) {
-    const x = col * 256 + (row % 2) * 128, y = row * 128;
-    pc.strokeStyle = 'rgba(30,28,26,.85)'; pc.lineWidth = 3; pc.strokeRect(x % 512, y, 256, 128);
-    for (let k = 10; k < 256; k += 20) for (const yy of [y + 9, y + 119]) {
-      pc.fillStyle = 'rgba(245,240,230,.9)'; pc.beginPath(); pc.arc((x + k) % 512, yy - 1, 3.2, 0, Math.PI * 2); pc.fill();
-      pc.fillStyle = 'rgba(25,22,20,.8)'; pc.beginPath(); pc.arc((x + k) % 512, yy + 1.5, 3, 0, Math.PI); pc.fill();
-    }
-  }
-  const plateMap = m.texture(plateCanvas);
-  const plated = (mat: THREE.MeshStandardMaterial, metres: number, strength: number) => {
-    mat.onBeforeCompile = shader => {
-      shader.uniforms.plateMap = { value: plateMap };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vPlatePos; varying vec3 vPlateNormal;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlatePos = position; vPlateNormal = normal;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D plateMap; varying vec3 vPlatePos; varying vec3 vPlateNormal;')
-        .replace('#include <map_fragment>', `#include <map_fragment>
-          vec3 plateW = pow(abs(normalize(vPlateNormal)), vec3(4.)); plateW /= plateW.x + plateW.y + plateW.z;
-          vec3 plateP = vPlatePos / ${metres.toFixed(2)};
-          float plate = texture2D(plateMap, plateP.zy).r * plateW.x + texture2D(plateMap, plateP.xz).r * plateW.y + texture2D(plateMap, plateP.xy).r * plateW.z;
-          diffuseColor.rgb *= mix(1., plate * 1.25, ${strength.toFixed(2)});`)
-        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-          roughnessFactor = clamp(roughnessFactor + (.8 - plate) * ${(strength * .6).toFixed(2)}, .05, 1.);`);
-    };
-    mat.customProgramCacheKey = () => `brassworks-plate-${metres}-${strength}`;
-  };
-  plated(iron, 2.6, .8); plated(copper, 3.2, .75); plated(bronze, 2.6, .8); plated(brass, 2.2, .45);
-
-  // Paving slabs in metres (plaza top is mapped by hand below).
-  const slabCanvas = document.createElement('canvas'); slabCanvas.width = slabCanvas.height = 256;
-  const sc = slabCanvas.getContext('2d')!;
-  sc.fillStyle = '#6c665d'; sc.fillRect(0, 0, 256, 256);
-  for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) {
-    const shade = 120 + ((row * 5 + col * 3) % 7) * 6;
-    sc.fillStyle = `rgb(${shade},${shade - 6},${shade - 16})`; sc.fillRect(col * 64 + (row % 2) * 32 + 2, row * 64 + 2, 60, 60);
-    sc.fillStyle = `rgb(${shade - 14},${shade - 20},${shade - 30})`; sc.fillRect((col * 64 + (row % 2) * 32 + 34) % 256, row * 64 + 2, 30, 60);
-  }
-  paving.map = m.texture(slabCanvas); paving.map.repeat.set(12, 10);
+  const { iron, brass, copper, bronze, glass, warmGlass, glow, paving, wood } = kit.mat;
+  const { canvasMaterial, goldText, plate } = kit;
+  const sketch = kit.sketch('hero');
+  const { add, box, cyl, cylLow, sphere, rivet, dome, band, halfTorus, halfDisc, disc, vault, cone, plane,
+    face, front, right, left, back, archWindow, pilaster, railing, tube, bands, lamp, crate } = sketch;
 
   // ------------------------------------------------------------ Signs
-  const canvasMaterial = (width: number, height: number, draw: (c: CanvasRenderingContext2D) => void, transparent = false) => {
-    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
-    draw(canvas.getContext('2d')!);
-    const mat = new THREE.MeshStandardMaterial({ map: m.texture(canvas), roughness: .55, metalness: .35, transparent, side: THREE.DoubleSide,
-      polygonOffset: true, polygonOffsetFactor: -2 });
-    materials.push(mat); return mat;
-  };
-  const goldText = (c: CanvasRenderingContext2D, top: number, bottom: number) => {
-    const g = c.createLinearGradient(0, top, 0, bottom);
-    g.addColorStop(0, '#f6dfa0'); g.addColorStop(.5, '#d0a254'); g.addColorStop(1, '#8e6429'); return g;
-  };
-  const plate = (c: CanvasRenderingContext2D, w: number, h: number) => {
-    c.fillStyle = '#1e2021'; c.fillRect(0, 0, w, h);
-    c.strokeStyle = '#b68d4c'; c.lineWidth = 10; c.strokeRect(8, 8, w - 16, h - 16);
-    c.lineWidth = 3; c.strokeRect(24, 24, w - 48, h - 48);
-    c.fillStyle = '#c29a57';
-    for (let x = 16; x < w; x += 44) for (const y of [16, h - 16]) { c.beginPath(); c.arc(x, y, 4, 0, Math.PI * 2); c.fill(); }
-  };
   const nameSign = canvasMaterial(1024, 256, c => {
     plate(c, 1024, 256);
     c.textAlign = 'center'; c.fillStyle = goldText(c, 50, 170); c.font = 'bold 118px Georgia'; c.fillText('BRASS & CO.', 512, 160);
@@ -144,115 +63,11 @@ export function createBrassWorks(m: Materials) {
     for (const r of [245, 190]) { c.beginPath(); c.arc(256, 256, r, 0, Math.PI * 2); c.stroke(); }
   });
 
-  // ------------------------------------------------------------ Geometry kit
-  const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
-  const tmp = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, p: V3, s: V3 = [1, 1, 1], r: V3 = [0, 0, 0], base?: THREE.Matrix4) => {
-    const g = geo.index ? geo.toNonIndexed() : geo.clone();
-    tmp.compose(new THREE.Vector3(...p), q.setFromEuler(e.set(r[0], r[1], r[2])), new THREE.Vector3(...s));
-    if (base) tmp.premultiply(base);
-    g.applyMatrix4(tmp);
-    if (!parts.has(mat)) parts.set(mat, []);
-    parts.get(mat)!.push(g);
-  };
-  const box = new THREE.BoxGeometry(1, 1, 1);
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 24);
-  const cylLow = new THREE.CylinderGeometry(1, 1, 1, 10);
-  const sphere = new THREE.SphereGeometry(1, 20, 12), rivet = new THREE.SphereGeometry(1, 8, 5);
-  const dome = new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-  const band = new THREE.TorusGeometry(1, .02, 6, 40);
-  const halfTorus = new THREE.TorusGeometry(1, .03, 6, 28, Math.PI);
-  const halfDisc = new THREE.CircleGeometry(1, 28, 0, Math.PI);
-  const disc = new THREE.CircleGeometry(1, 40);
-  const vault = new THREE.CylinderGeometry(1, 1, 1, 32, 1, true, Math.PI, Math.PI);
-  const cone = new THREE.ConeGeometry(1, 1, 16);
-  const plane = new THREE.PlaneGeometry(1, 1);
-  const face = (yaw: number, x: number, z: number) => new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
-  const front = (z: number) => face(0, 0, z), right = (x: number) => face(Math.PI / 2, x, 0);
-  const left = (x: number) => face(-Math.PI / 2, x, 0), back = (z: number) => face(Math.PI, 0, z);
-
-  /** A round-headed window, lit from within, drawn on a wall facing the frame's +z. */
-  const archWindow = (f: THREE.Matrix4, x: number, y: number, w: number, h: number) => {
-    const body = h - w / 2, top = y + body;
-    add(box, glow, [x, y + body / 2, .03], [w, body, .06], [0, 0, 0], f);
-    add(halfDisc, glow, [x, top, .065], [w / 2, w / 2, 1], [0, 0, 0], f);
-    add(halfTorus, iron, [x, top, .1], [w / 2 + .08, w / 2 + .08, 5], [0, 0, 0], f);
-    for (const side of [-1, 1]) add(box, iron, [x + side * (w / 2 + .08), y + body / 2, .1], [.2, body, .22], [0, 0, 0], f);
-    add(box, brass, [x, y - .08, .2], [w + .5, .18, .42], [0, 0, 0], f);
-    add(box, iron, [x, y + body / 2 + .1, .1], [.07, body + w / 2 - .2, .1], [0, 0, 0], f);
-    for (const t of [.36, .7]) add(box, iron, [x, y + body * t, .1], [w, .07, .1], [0, 0, 0], f);
-  };
-  const pilaster = (f: THREE.Matrix4, x: number, y0: number, y1: number, width = .8) => {
-    add(box, iron, [x, (y0 + y1) / 2, .22], [width, y1 - y0, .44], [0, 0, 0], f);
-    add(box, brass, [x, y1 - .2, .32], [width + .24, .3, .56], [0, 0, 0], f);
-    add(box, brass, [x, y0 + .25, .32], [width + .24, .3, .56], [0, 0, 0], f);
-  };
-  const railing = (x0: number, z0: number, x1: number, z1: number, y: number, height = 1.1, finials = false) => {
-    const length = Math.hypot(x1 - x0, z1 - z0), yaw = Math.atan2(-(z1 - z0), x1 - x0);
-    const f = face(yaw, (x0 + x1) / 2, (z0 + z1) / 2);
-    add(box, brass, [0, y + height, 0], [length, .08, .08], [0, 0, 0], f);
-    add(box, iron, [0, y + height * .5, 0], [length, .05, .05], [0, 0, 0], f);
-    const posts = Math.max(1, Math.round(length / 1.3));
-    for (let i = 0; i <= posts; i++) {
-      const u = -length / 2 + length * i / posts;
-      add(box, iron, [u, y + height / 2, 0], [.07, height, .07], [0, 0, 0], f);
-      if (finials && i % 3 === 0) {
-        add(box, iron, [u, y + height / 2, 0], [.16, height + .1, .16], [0, 0, 0], f);
-        add(cone, brass, [u, y + height + .35, 0], [.1, .5, .1], [0, 0, 0], f);
-      }
-    }
-  };
-  const tube = (points: V3[], radius: number, mat: THREE.Material, flanges: number[] = []) => {
-    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)), false, 'centripetal', .2);
-    add(new THREE.TubeGeometry(curve, points.length * 16, radius, 18, false), mat, [0, 0, 0]);
-    for (const t of flanges) {
-      const p = curve.getPointAt(t), tangent = curve.getTangentAt(t);
-      const g = new THREE.TorusGeometry(radius * 1.12, radius * .12, 6, 24);
-      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent)); g.translate(p.x, p.y, p.z);
-      add(g, brass, [0, 0, 0]);
-    }
-  };
-  /** Banded vertical tank or stack. */
-  const bands = (x: number, z: number, r: number, heights: number[], thickness = 1) => {
-    for (const y of heights) add(band, brass, [x, y, z], [r + .05, r + .05, thickness * 10], [Math.PI / 2, 0, 0]);
-  };
-  const gearGeometry = (() => {
-    const shape = new THREE.Shape();
-    for (let k = 0; k <= 128; k++) {
-      const a = k / 128 * Math.PI * 2, r = k % 4 < 2 ? 1 : .86;
-      if (k === 0) shape.moveTo(Math.cos(a) * r, Math.sin(a) * r); else shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-    }
-    const hole = new THREE.Path(); hole.absarc(0, 0, .74, 0, Math.PI * 2, true); shape.holes.push(hole);
-    const pieces: THREE.BufferGeometry[] = [new THREE.ExtrudeGeometry(shape, { depth: .14, bevelEnabled: false, curveSegments: 4 }).toNonIndexed()];
-    for (let k = 0; k < 6; k++) { const spoke = new THREE.BoxGeometry(1.5, .1, .12).toNonIndexed(); spoke.rotateZ(k * Math.PI / 6); spoke.translate(0, 0, .07); pieces.push(spoke); }
-    const hub = new THREE.CylinderGeometry(.2, .2, .3, 16).toNonIndexed(); hub.rotateX(Math.PI / 2); hub.translate(0, 0, .07); pieces.push(hub);
-    const inner = new THREE.TorusGeometry(.78, .05, 5, 48).toNonIndexed(); inner.translate(0, 0, .07); pieces.push(inner);
-    return mergeGeometries(pieces)!;
-  })();
   const gears: THREE.Object3D[] = [], rates: number[] = [];
   const gear = (p: V3, radius: number, yaw: number, rate: number, mat = brass) => {
     const axle = new THREE.Group(); axle.name = 'steam-flywheel'; axle.position.set(...p); axle.rotation.y = yaw;
-    const mesh = new THREE.Mesh(gearGeometry, mat); mesh.scale.set(radius, radius, radius * .9); mesh.castShadow = true;
+    const mesh = new THREE.Mesh(kit.heroGear, mat); mesh.scale.set(radius, radius, radius * .9); mesh.castShadow = true;
     axle.add(mesh); root.add(axle); gears.push(mesh); rates.push(rate);
-  };
-  const lamp = (x: number, z: number, height = 4.6) => {
-    add(box, iron, [x, .9, z], [.5, .8, .5]);
-    add(cylLow, iron, [x, height / 2 + .5, z], [.09, height, .09]);
-    add(box, glow, [x, height + .95, z], [.44, .7, .44]);
-    for (const u of [-.24, .24]) for (const v of [-.24, .24]) add(box, iron, [x + u, height + .95, z + v], [.05, .8, .05]);
-    add(cone, iron, [x, height + 1.55, z], [.42, .5, .42]);
-    add(rivet, brass, [x, height + 1.9, z], [.09, .12, .09]);
-    add(box, brass, [x, height + .52, z], [.52, .08, .52]);
-  };
-  const crate = (x: number, y: number, z: number, s: number, yaw = 0) => {
-    add(box, wood, [x, y + s / 2, z], [s, s, s], [0, yaw, 0]);
-    const f = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
-    for (const [u, v] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) add(box, iron, [u * s / 2, y + s / 2, v * s / 2], [.08, s + .02, .08], [0, 0, 0], f);
-    for (const yy of [y + .04, y + s - .04]) for (const side of [-1, 1]) {
-      add(box, iron, [0, yy, side * s / 2], [s + .02, .08, .08], [0, 0, 0], f);
-      add(box, iron, [side * s / 2, yy, 0], [.08, .08, s + .02], [0, 0, 0], f);
-    }
-    add(box, iron, [0, y + s / 2, s / 2 + .01], [s * 1.35, .06, .02], [0, 0, Math.PI / 4], f);
   };
 
   // ------------------------------------------------------------ Plaza
@@ -548,23 +363,13 @@ export function createBrassWorks(m: Materials) {
   add(box, iron, [-1, plazaTop + .6, 0], [.1, .9, .1], [0, 0, 0], cf);
 
   // ------------------------------------------------------------ Merge
-  const noShadow = new Set<THREE.Material>([glow, glass, warmGlass, nameSign, fuelPlaque, steamPlaque, wallMotto, roseMaterial, ...vaneLetters]);
-  for (const [mat, list] of parts) {
-    const geometry = mergeGeometries(list)!; list.forEach(g => g.dispose());
-    const mesh = new THREE.Mesh(geometry, mat); mesh.name = `steam-brassworks-${(mat as THREE.MeshStandardMaterial).name || 'sign'}`;
-    mesh.castShadow = !noShadow.has(mat); mesh.receiveShadow = mat !== glow;
+  const merged = sketch.merge(); sketch.dispose();
+  for (const [mat, geometry] of merged) {
+    const mesh = new THREE.Mesh(geometry, mat); mesh.name = `steam-brassworks-${(mat as THREE.MeshStandardMaterial).name}`;
+    mesh.castShadow = kit.castsShadow(mat); mesh.receiveShadow = mat !== glow;
     mesh.userData.roadClearanceVerified = true;
     root.add(mesh);
   }
-  for (const g of [box, cyl, cylLow, sphere, rivet, dome, band, halfTorus, halfDisc, disc, vault, cone, plane]) g.dispose();
 
-  return {
-    root, vents,
-    gears: gears.map((mesh, i) => ({ root: mesh, rate: rates[i] })),
-    setCinematic(enabled: boolean) {
-      glow.emissiveIntensity = enabled ? 1.7 : .9;
-      warmGlass.emissiveIntensity = enabled ? .4 : .18;
-    },
-    dispose: () => materials.forEach(mat => mat.dispose()),
-  };
+  return { root, vents, gears: gears.map((mesh, i) => ({ root: mesh, rate: rates[i] })) };
 }
