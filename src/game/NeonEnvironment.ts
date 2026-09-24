@@ -182,14 +182,23 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   // A cylindrical communications tower breaks the rectangular skyline. Its
   // three unequal drums, projecting floor rings and antenna crown are a
   // recognisable landmark from the opening straight and the western esses.
+  // Both landmarks sit at coordinates authored for Neon District; other
+  // layouts keep them only where the track leaves room.
+  const authored=!builder.spline.circuit.terrainFollow;
+  const towerClear=authored||builder.distanceToTrack(-92,-300)>34+22;
+  const heroClear=authored||builder.distanceToTrack(-25,-495)>34+18;
+  if(towerClear){
   occupied.push({x:-92,z:-300,r:34});
-  const towerGround=builder.groundAt(-92,-300,34),heroGround=builder.groundAt(-25,-501,26);
+  const towerGround=builder.groundAt(-92,-300,34);
   const tower=new THREE.InstancedMesh(new THREE.CylinderGeometry(.5,.5,1,48),facades[3],3);
   const drums=[[64,120,60],[50,80,160],[32,72,236]];
   drums.forEach(([width,height,y],i)=>{dummy.position.set(-92,y+towerGround,-300);dummy.rotation.set(0,0,0);dummy.scale.set(width,height,width);dummy.updateMatrix();tower.setMatrixAt(i,dummy.matrix);});tower.name='neon-orbital-exchange';tower.computeBoundingSphere();group.add(tower);
   const rings=new THREE.InstancedMesh(new THREE.TorusGeometry(1,.012,6,48),metal,44);let ri=0;
   for(let y=6;y<272;y+=7){const radius=y<=120?32.3:y<=200?25.3:16.3;dummy.position.set(-92,y+towerGround,-300);dummy.rotation.set(Math.PI/2,0,0);dummy.scale.setScalar(radius);dummy.updateMatrix();rings.setMatrixAt(ri++,dummy.matrix);}rings.count=ri;rings.name='neon-tower-floor-rings';rings.computeBoundingSphere();group.add(rings);
   block(metal,-92,282+towerGround,-300,.65,24,.65);block(glow[1],-92,294+towerGround,-300,.5,.7,.5);
+  }
+  if(heroClear){
+  const heroGround=builder.groundAt(-25,-501,26);
   // Hero landmark at the end of the opening boulevard, reserved before
   // filling the neighbourhood so its screen is not buried in another tower.
   addBuilding(-25,-501,42,32,135,0,false);
@@ -206,6 +215,7 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   block(metal,-25,110+heroGround,-482,44,1.6,5);
   addDisplay(artMaterials[billboards.pick(-25,-481.4)],-25,74+heroGround,-481.4,34,68,0);
   block(black,-25,74+heroGround,-481.8,35,69,.6);
+  }
   // Street-facing fronts follow the entire loop; the footprint guard checks
   // every other part of the circuit too, including the inside of the esses.
   for(let i=0;i<builder.spline.count;i+=7){
@@ -235,7 +245,8 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   group.userData.cityBuildings=occupied.length;
   // Suspended utility cables add a middle-distance silhouette without filling
   // the track corridor with props. Their lowest point is 24 m above the road.
-  for(const fraction of [.02,.15,.31,.53,.81,.94]){
+  // Hilly layouts: the 110 m spans would end in mid-air above lowered blocks.
+  for(const fraction of hilly?[]:[.02,.15,.31,.53,.81,.94]){
     const s=builder.spline.sampleAt(Math.round(fraction*builder.spline.count));
     const cableGroup=new THREE.Group();cableGroup.name='neon-utility-overpass';cableGroup.userData.intentionalOverpass=true;
     for(let wire=0;wire<3;wire++){
@@ -278,12 +289,18 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
   const trains: {mesh:THREE.Group;center:THREE.Vector3;right:THREE.Vector3;phase:number}[]=[];
   for(const [j,p]of [.065,.405,.73].entries()){
     const s=builder.spline.sampleAt(Math.round(p*builder.spline.count));
+    // Hills: no other part of the lap may pass within the gantry's footprint.
+    if(hilly){const n=builder.spline.count,i0=s.index;if(builder.spline.samples.some(o=>{const d=Math.min(Math.abs(o.index-i0),n-Math.abs(o.index-i0));return d>15&&Math.hypot(o.position.x-s.position.x,o.position.z-s.position.z)<42;}))continue;}
     const portal=new THREE.Group();portal.name='neon-transit-overpass';portal.userData.intentionalOverpass=true;
     portal.position.copy(s.position);portal.rotation.y=Math.atan2(s.tangent.x,s.tangent.z);group.add(portal);
     const part=(mat:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number)=>{const m=new THREE.Mesh(box,mat);m.position.set(x,y,z);m.scale.set(w,h,d);portal.add(m);};
-    part(metal,0,19,0,110,2,7);part(glow[j%2],0,17.9,-3.55,108,.12,.12);
+    // Hills: a gantry between its own columns (no 110 m skytrain beam, no train).
+    const span=hilly?33:110;
+    part(metal,0,19,0,span,2,7);part(glow[j%2],0,17.9,-3.55,span-2,.12,.12);
+    if(hilly)for(const side of [-1,1])part(metal,side*15,20.2,0,2.6,.5,3.4);
     const footing=hilly?12:0;
     for(const side of [-1,1]){part(concrete,side*15,8.5-footing/2,0,2,17+footing,3);part(glow[j%2],side*13.9,8.5,-1.55,.12,16,.1);}
+    if(hilly)continue;
     const train=new THREE.Group();train.name='neon-skytrain';train.userData.intentionalOverpass=true;group.add(train);
     for(let k=0;k<3;k++){const body=new THREE.Mesh(box,metal);body.scale.set(13,3.2,4.2);body.position.x=k*14;train.add(body);const window=new THREE.Mesh(box,glow[0]);window.scale.set(11,1.3,.1);window.position.set(k*14,.4,-2.2);train.add(window);}
     train.rotation.y=portal.rotation.y;trains.push({mesh:train,center:s.position.clone().add(new THREE.Vector3(0,22,0)),right:new THREE.Vector3(Math.cos(portal.rotation.y),0,-Math.sin(portal.rotation.y)),phase:j*.31});

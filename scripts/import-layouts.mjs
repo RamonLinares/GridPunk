@@ -39,6 +39,55 @@ const splineLength = points => {
   return { curve, length: curve.getLength() };
 };
 
+/**
+ * GridPunk builds barriers 12 m either side of the centreline, so any corner
+ * tighter than MIN_RADIUS folds the inner wall across the road. Resample the
+ * closed curve every 4 m (as TrackSpline does) and relax only the plan points
+ * in over-tight corners until every radius clears the limit.
+ */
+const MIN_RADIUS = 16.5;
+const radiusAt = (pts, i) => {
+  const n = pts.length, a = pts[(i - 1 + n) % n], b = pts[i], c = pts[(i + 1) % n];
+  const d1 = Math.atan2(b[0] - a[0], b[2] - a[2]), d2 = Math.atan2(c[0] - b[0], c[2] - b[2]);
+  let delta = d2 - d1; while (delta > Math.PI) delta -= 2 * Math.PI; while (delta < -Math.PI) delta += 2 * Math.PI;
+  return Math.hypot(c[0] - b[0], c[2] - b[2]) / Math.max(1e-6, Math.abs(delta));
+};
+const easeTightCorners = (points, length) => {
+  const pts = splineLength(points).curve.getSpacedPoints(Math.round(length / 4)).slice(0, -1).map(p => [p.x, p.y, p.z]);
+  const n = pts.length, heading = [], step = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], c = pts[(i + 1) % n];
+    heading.push(Math.atan2(c[0] - a[0], c[2] - a[2])); step.push(Math.hypot(c[0] - a[0], c[2] - a[2]));
+  }
+  // Turn between consecutive segments; cap it at step / MIN_RADIUS and push
+  // the excess to both neighbours (total turning is conserved).
+  const turn = heading.map((h, i) => { let d = heading[(i + 1) % n] - h; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; });
+  let passes = 0;
+  for (; passes < 20000; passes++) {
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      const limit = step[(i + 1) % n] / MIN_RADIUS, excess = Math.abs(turn[i]) - limit;
+      if (excess <= 1e-6) continue;
+      const sign = Math.sign(turn[i]);
+      turn[i] -= sign * excess; turn[(i - 1 + n) % n] += sign * excess / 2; turn[(i + 1) % n] += sign * excess / 2;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  // Re-integrate the plan, then spread the closure drift along the lap.
+  const out = [[pts[0][0], pts[0][1], pts[0][2]]];
+  let h = heading[0];
+  for (let i = 0; i < n - 1; i++) {
+    const p = out[i];
+    out.push([p[0] + Math.sin(h) * step[i], pts[i + 1][1], p[2] + Math.cos(h) * step[i]]);
+    h += turn[i];
+  }
+  const last = out[n - 1], endX = last[0] + Math.sin(h) * step[n - 1], endZ = last[2] + Math.cos(h) * step[n - 1];
+  const driftX = endX - out[0][0], driftZ = endZ - out[0][2];
+  const eased = out.map((p, i) => [p[0] - driftX * i / n, p[1], p[2] - driftZ * i / n]);
+  return { pts: eased, passes, drift: Math.hypot(driftX, driftZ) };
+};
+
 const out = {}, maps = {};
 for (const layout of layouts) {
   const text = await read(layout.file);
@@ -48,7 +97,10 @@ for (const layout of layouts) {
     points = points.filter(p => !omit.has(p.join(',')));
   }
   const base = points[0][1];
-  const rebased = points.map(([x, y, z]) => [x, y - base, z]);
+  let rebased = points.map(([x, y, z]) => [x, y - base, z]);
+  const eased = easeTightCorners(rebased, layout.length);
+  // Keep the start/finish control at the origin after resampling.
+  rebased = eased.pts.map(([x, y, z]) => [x - eased.pts[0][0], y - eased.pts[0][1], z - eased.pts[0][2]]);
   // Scale the plan only, iterating because the climb does not scale with it.
   let scale = 1;
   for (let k = 0; k < 6; k++) scale *= layout.length / splineLength(rebased.map(([x, y, z]) => [x * scale, y, z * scale])).length;
@@ -68,7 +120,8 @@ for (const layout of layouts) {
     const d = Math.hypot(spaced[i].x - spaced[j].x, spaced[i].z - spaced[j].z);
     if (d < closest.d) closest = { d, a: i / spaced.length, b: j / spaced.length };
   }
-  console.log(`${layout.id}: ${points.length} controls, scale ${scale.toFixed(6)}, lap ${length.toFixed(1)} m, climb ${Math.min(...heights).toFixed(1)}..${Math.max(...heights).toFixed(1)} m, ${corners?.length ?? 'auto'} corners, closest approach ${closest.d.toFixed(1)} m at ${closest.a?.toFixed(3)} / ${closest.b?.toFixed(3)}`);
+  const finalMin = Math.min(...curve.getSpacedPoints(Math.round(length / 4)).slice(0, -1).map(p => [p.x, p.y, p.z]).map((_, i, all) => radiusAt(all, i)));
+  console.log(`${layout.id}: eased in ${eased.passes} passes (closure drift ${eased.drift.toFixed(1)} m), min radius ${finalMin.toFixed(1)} m; ${points.length} controls, scale ${scale.toFixed(6)}, lap ${length.toFixed(1)} m, climb ${Math.min(...heights).toFixed(1)}..${Math.max(...heights).toFixed(1)} m, ${corners?.length ?? 'auto'} corners, closest approach ${closest.d.toFixed(1)} m at ${closest.a?.toFixed(3)} / ${closest.b?.toFixed(3)}`);
   out[layout.id] = { points: scaled, sectors: [sectors[0], sectors.length > 2 ? sectors[0] + sectors[1] : sectors[1]], corners, grid, closest: +closest.d.toFixed(1) };
   maps[layout.id] = curve.getSpacedPoints(Math.round(length / 4)).map(p => [p.x, p.z]);
 }
