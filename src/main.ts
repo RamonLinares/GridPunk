@@ -42,7 +42,7 @@ document.querySelector('.session-location')!.innerHTML = `<span>${circuit.length
     document.querySelector('.session-specs > div:last-child b')!.textContent = daylight ? 'SUN' : 'RAIN';
     title.textContent = circuit.shortName;
     document.querySelector('.session-home')!.textContent = circuit.shortName.toUpperCase();
-    document.querySelector('.loading-log > span')!.textContent = `> ${circuit.shortName.toUpperCase()}  ${circuit.lengthLabel} KM`;
+    document.querySelector('#loading-title')!.textContent = circuit.shortName;
     kicker.textContent = '';
     description.textContent = '';
     document.querySelector('.course-credit')!.innerHTML = '<a href="/credits.html">Credits &amp; licences</a>';

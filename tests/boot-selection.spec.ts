@@ -76,3 +76,18 @@ test('a failed game download can recover with the selected race intact', async (
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.circuit === 'steam' && document.querySelector<HTMLElement>('#loading')?.hidden);
   await expect(page).toHaveTitle('GridPunk — Kairo Steam');
 });
+
+test('keyboard shortcuts browse worlds and circuits, and Enter starts the race', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#stage-select')).toBeVisible();
+  await page.keyboard.press('e');
+  await expect(page.locator('#selection-name')).toHaveText('Solarpunk · Neon District');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#selection-name')).toHaveText('Steampunk · Neon District');
+  await page.keyboard.press('q');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#selection-name')).toHaveText('Solarpunk · Kairo Loop');
+  await expect(page.locator('[data-select-stage="solarpunk"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.circuit === 'solar' && document.querySelector<HTMLElement>('#loading')?.hidden);
+});

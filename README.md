@@ -12,7 +12,7 @@ A racing game with three stages: **Cyberpunk**, **Solarpunk**, and **Steampunk**
 
 ## What's included
 
-- A lightweight opening screen for Cyberpunk, Solarpunk and Steampunk, each with two circuit choices. Switching stage retains the selected layout. The race screen also lets you change stage, circuit and car. Existing circuit links and records remain compatible.
+- A lightweight, cinematic opening screen for Cyberpunk, Solarpunk and Steampunk, each with two circuit choices: per-world rain, pollen or ember atmosphere, synthesised menu sounds (toggle top right), and keyboard (Q/E worlds, ↑/↓ circuits, Enter to race) or controller (LB/RB, D-pad, A) navigation. Switching stage retains the selected layout. The race screen also lets you change stage, circuit and car. Existing circuit links and records remain compatible.
 - Neon Solar and Neon Steam: the original District centreline, banked turns and tunnel ported into garden-city and foundry-city scenery. The themed underpasses retain 7.2 m clearance. Open `?stage=solarpunk&circuit=neon` or `?stage=steampunk&circuit=neon`. See [stage and circuit notes](docs/stages.md).
 
 - Kairo Loop: An 18-corner layout adapted to the city, including a grade-separated figure-eight flyover and a giant animated Ferris wheel with pink rim lights, ramen and bonsai holograms, and a Mars video billboard. Open directly with `?circuit=kairo`.
@@ -71,7 +71,7 @@ Pushes to `main` deploy automatically to GitHub Pages. See [deployment notes](do
 - `src/entities/`: both cars and their runtime models.
 - `src/systems/`: driving, rivals, audio, cameras, timing and replay.
 - `public/circuits/`, `public/cars/`: self-contained runtime media/models.
-- `public/menu/`: compressed captures from all three worlds and the locally served display font. With the dev server running, `node scripts/capture-selection-art.mjs` rebuilds the images and actual circuit outlines (requires Chrome and `cwebp`).
+- `public/menu/`: compressed cinematic-tier hero captures from all three worlds and the locally served display font. With the dev server running, `node scripts/capture-selection-art.mjs` rebuilds the images and actual circuit outlines (requires Chrome and `cwebp`).
 - `assets/`, `scripts/blender/`: authoring sources; Blender is only needed to rebuild models.
 - [Credits](public/credits.html) and [asset manifest](public/data/asset-manifest.json): asset sources and licences.
 
