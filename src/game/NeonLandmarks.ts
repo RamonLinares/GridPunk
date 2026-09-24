@@ -87,13 +87,13 @@ export function createNeonLandmarks(parent:THREE.Group,builder:TrackBuilder,ligh
    if(pieces.length){const geometry=mergeGeometries(pieces,false)!;const material=new THREE.MeshStandardMaterial({vertexColors:true,map:wear,roughness:.67,metalness:.38});material.name='BlenderWeatheredStructure';
     const mesh=new THREE.Mesh(geometry,material);mesh.name='neon-blender-structural-shell';g.scene.add(mesh);pieces.forEach(p=>p.dispose());opaque.forEach(m=>{m.removeFromParent();m.geometry.dispose();(m.material as THREE.Material).dispose()});}
   }
-  placements.forEach((p,i)=>{const root=gltfs[p.variant].scene.clone(true);root.name=`neon-blender-${variants[p.variant]}-${i}`;root.position.set(p.x,0,p.z);root.rotation.y=p.angle;root.userData.roadClearanceVerified=true;root.userData.campaign=billboards.gltfMaterials[p.adIndex].userData.campaign;root.traverse(o=>{if(o.userData.campaignScreen)(o as THREE.Mesh).material=billboards.gltfMaterials[p.adIndex]});group.add(root);roots.push(root);dress(p);});
+  placements.forEach((p,i)=>{const root=gltfs[p.variant].scene.clone(true);root.name=`neon-blender-${variants[p.variant]}-${i}`;root.position.set(p.x,builder.groundAt(p.x,p.z,p.r),p.z);root.rotation.y=p.angle;root.userData.roadClearanceVerified=true;root.userData.campaign=billboards.gltfMaterials[p.adIndex].userData.campaign;root.traverse(o=>{if(o.userData.campaignScreen)(o as THREE.Mesh).material=billboards.gltfMaterials[p.adIndex]});group.add(root);roots.push(root);dress(p);});
   pairs.forEach(({fraction},i)=>{
    const s=builder.spline.sampleAt(Math.round(fraction*builder.spline.count));
-   const bridge=gltfs[3].scene.clone(true);bridge.name='neon-building-skybridge';bridge.position.copy(s.position);bridge.position.y=30;bridge.rotation.y=Math.atan2(-s.right.z,s.right.x);bridge.userData.intentionalOverpass=true;group.add(bridge);roots.push(bridge);
+   const bridge=gltfs[3].scene.clone(true);bridge.name='neon-building-skybridge';bridge.position.copy(s.position);bridge.position.y=(builder.spline.circuit.terrainFollow?s.position.y:0)+30;bridge.rotation.y=Math.atan2(-s.right.z,s.right.x);bridge.userData.intentionalOverpass=true;group.add(bridge);roots.push(bridge);
    // Both ends penetrate the adjacent building decks; no freestanding pylons.
    for(let wire=0;wire<4;wire++){
-    const points=[];for(let k=0;k<=16;k++){const t=k/16;const p=s.position.clone().addScaledVector(s.right,(t-.5)*74).addScaledVector(s.tangent,6+wire*.7);p.y=42+i%3*6-Math.sin(t*Math.PI)*(7+wire*.3);points.push(p);}
+    const points=[];for(let k=0;k<=16;k++){const t=k/16;const p=s.position.clone().addScaledVector(s.right,(t-.5)*74).addScaledVector(s.tangent,6+wire*.7);p.y=(builder.spline.circuit.terrainFollow?s.position.y:0)+42+i%3*6-Math.sin(t*Math.PI)*(7+wire*.3);points.push(p);}
     const mesh=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),20,.045,3,false),cableMat);mesh.name='neon-building-service-cable';mesh.userData.intentionalOverpass=true;group.add(mesh);
    }
   });

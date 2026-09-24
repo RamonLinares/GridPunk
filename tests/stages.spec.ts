@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { CIRCUITS, STAGES, circuitFor, circuitsForStage, isDryCircuit, isKairoLayout, selectedCircuit } from '../src/game/track/circuits';
+import { CIRCUITS, LAYOUT_ORDER, STAGES, circuitFor, circuitsForStage, isDryCircuit, isKairoLayout, selectedCircuit, type LayoutId } from '../src/game/track/circuits';
 import { TrackSpline } from '../src/game/track/TrackSpline';
 
-test('each stage has both exact layouts, including District banking and independent identities', () => {
+test('each stage has every layout, including District banking and independent identities', () => {
   const identities = new Set();
   for (const stage of Object.values(STAGES)) {
-    expect(circuitsForStage(stage.id).map(c => c.layout)).toEqual(['neon', 'kairo']);
+    expect(circuitsForStage(stage.id).map(c => c.layout)).toEqual(LAYOUT_ORDER);
     for (const layout of ['neon', 'kairo'] as const) {
       const circuit = circuitFor(stage.id, layout), original = CIRCUITS[layout];
       identities.add(circuit.id);
@@ -23,12 +23,25 @@ test('each stage has both exact layouts, including District banking and independ
         .toEqual(b.samples.map(s => [s.position.toArray(), s.normal.toArray(), s.right.toArray()]));
     }
   }
-  expect(identities.size).toBe(6);
+  // Imported layouts: one identity per stage, sharing the same surveyed centreline.
+  for (const layout of LAYOUT_ORDER.filter(id => id !== 'neon' && id !== 'kairo') as LayoutId[]) {
+    const [cyber, solar, steam] = (['cyberpunk', 'solarpunk', 'steampunk'] as const).map(stage => circuitFor(stage, layout));
+    for (const circuit of [cyber, solar, steam]) {
+      identities.add(circuit.id);
+      expect(circuit.terrainFollow).toBe(true);
+      expect(circuit.points).toBe(cyber.points);
+      expect(selectedCircuit(`?circuit=${circuit.id}`)).toBe(circuit);
+    }
+  }
+  expect(identities.size).toBe(24);
+  // The surveyed climb is kept: the longest layout rises and falls by ~96 m.
+  const ys = new TrackSpline(CIRCUITS['talon-steam']).samples.map(s => s.position.y);
+  expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(80);
   expect(selectedCircuit('?stage=unknown&circuit=solar')).toBe(CIRCUITS.solar);
   expect(selectedCircuit('?circuit=unknown')).toBe(CIRCUITS.neon);
 });
 
-test('stage navigation retains layout, car and distinct lap records; each stage lists only its two circuits', async ({ page, isMobile }, info) => {
+test('stage navigation retains layout, car and distinct lap records; each stage lists its eight circuits', async ({ page, isMobile }, info) => {
   await page.addInitScript(() => {
     localStorage.setItem('gridpunk:neon-solar-sprint-best-v1:easy', '91.234');
     localStorage.setItem('gridpunk:neon-steam-sprint-best-v1:easy', '103.456');
@@ -37,7 +50,7 @@ test('stage navigation retains layout, car and distinct lap records; each stage 
   const ready = async (id: string) => page.waitForFunction(id => window.__THREE_GAME_DIAGNOSTICS__?.circuit === id && document.querySelector<HTMLElement>('#loading')?.hidden, id);
   const activate = async (selector: string) => { if (isMobile) await page.locator(selector).tap(); else await page.locator(selector).click(); };
   await ready('neon-solar');
-  await expect(page.locator('[data-circuit]')).toHaveCount(2);
+  await expect(page.locator('[data-circuit]')).toHaveCount(8);
   await expect(page.locator('[data-stage]')).toHaveCount(3);
   await expect(page.locator('[data-circuit="neon-solar"]')).toContainText('NEON DISTRICT');
   await expect(page.locator('[data-circuit="solar"]')).toContainText('KAIRO LOOP');

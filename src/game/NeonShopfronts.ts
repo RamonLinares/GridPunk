@@ -19,9 +19,9 @@ export function createNeonShopfronts(parent: THREE.Group, builder: TrackBuilder)
   let total=0,litCount=0;
   const hash=(n:number)=>{const a=Math.sin(n*127.1+311.7)*43758.5453;return a-Math.floor(a)};
   const record=(mat:THREE.Material)=>{dummy.updateMatrix();const b=batches.get(mat)??[];b.push(dummy.matrix.clone());batches.set(mat,b)};
-  const addBuilding=(x:number,z:number,w:number,d:number,angle:number,id:number,exterior:THREE.MeshStandardMaterial)=>{
+  const addBuilding=(x:number,z:number,w:number,d:number,angle:number,id:number,exterior:THREE.MeshStandardMaterial,ground=0)=>{
     const co=Math.cos(angle),si=Math.sin(angle),front=d/2;
-    const at=(u:number,y:number,v:number)=>new THREE.Vector3(x+co*u+si*v,y,z-si*u+co*v);
+    const at=(u:number,y:number,v:number)=>new THREE.Vector3(x+co*u+si*v,y+ground,z-si*u+co*v);
     const block=(mat:THREE.Material,u:number,y:number,v:number,sx:number,sy:number,sz:number)=>{
       dummy.position.copy(at(u,y,v));dummy.rotation.set(0,angle,0);dummy.scale.set(sx,sy,sz);record(mat);
     };

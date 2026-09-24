@@ -404,16 +404,16 @@ body[data-menu-input="pad"] .stage-select .key-hint { border-radius:10px; border
 .selection-dock-index { display:flex; align-items:baseline; gap:10px; color:var(--accent); font:12px var(--mono); letter-spacing:.2em; }
 .selection-dock-index b { color:var(--text); font-weight:600; }
 .selection-dock-keys { display:flex; gap:4px; }
-.selection-circuit-list { display:grid; gap:8px; }
+.selection-circuit-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 .selection-circuit {
   position:relative;
   display:flex;
   align-items:center;
-  gap:14px;
+  gap:9px;
   width:100%;
   min-width:0;
-  min-height:62px;
-  padding:10px 14px 10px 12px;
+  min-height:48px;
+  padding:7px 9px;
   border:0;
   border-left:3px solid transparent;
   background:rgba(255,255,255,.04);
@@ -430,18 +430,16 @@ body[data-menu-input="pad"] .stage-select .key-hint { border-radius:10px; border
   box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.4);
   color:var(--text);
 }
-.selection-circuit-icon { flex:none; width:52px; height:34px; }
-.selection-circuit-icon path { fill:none; stroke:currentColor; stroke-width:9; stroke-linejoin:round; opacity:.7; }
+.selection-circuit-icon { flex:none; width:34px; height:24px; }
+.selection-circuit-icon path { fill:none; stroke:currentColor; stroke-width:12; stroke-linejoin:round; opacity:.7; }
 .selection-circuit.is-selected .selection-circuit-icon path { stroke:var(--accent); opacity:1; }
-.selection-circuit-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
-.selection-route-number { font:8px var(--mono); letter-spacing:.2em; opacity:.75; }
-.selection-circuit strong { font:italic 900 22px/1 var(--display); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
-.selection-circuit-length { margin-left:auto; font:italic 900 18px/1 var(--display); letter-spacing:.03em; white-space:nowrap; }
-.selection-circuit-length small { margin-left:3px; font:8px var(--mono); letter-spacing:.1em; opacity:.7; }
+.selection-circuit-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.selection-circuit-copy small { font:8px var(--mono); letter-spacing:.12em; opacity:.75; white-space:nowrap; }
+.selection-circuit strong { font:italic 900 15px/1 var(--display); letter-spacing:.01em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 .selection-map {
   position:relative;
-  height:200px;
+  height:170px;
   display:grid;
   place-items:center;
   margin-top:18px;
@@ -565,7 +563,7 @@ body[data-menu-input="pad"] .stage-select .key-hint { border-radius:10px; border
   .selection-conditions { margin-top:16px; }
   .selection-stage-grid { height:128px; }
   .selection-race { padding:20px 22px 18px; }
-  .selection-circuit { min-height:54px; padding-block:8px; }
+  .selection-circuit { min-height:42px; padding-block:5px; }
   .selection-map { height:150px; margin-top:12px; }
   .selection-stats { margin-top:12px; padding-top:12px; }
   .selection-stats strong { font-size:28px; }
@@ -621,11 +619,10 @@ body[data-menu-input="pad"] .stage-select .key-hint { border-radius:10px; border
   .selection-race::before { width:calc(100% - 18px); }
   .selection-race-corner { width:18px; height:18px; }
   .selection-circuit-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
-  .selection-circuit { flex-wrap:wrap; gap:6px 10px; min-height:0; padding:10px; }
-  .selection-circuit-icon { width:38px; height:24px; }
+  .selection-circuit { gap:8px; min-height:44px; padding:7px 8px; }
+  .selection-circuit-icon { width:30px; height:20px; }
   .selection-circuit-copy { flex:1; }
-  .selection-circuit strong { font-size:17px; }
-  .selection-circuit-length { display:none; }
+  .selection-circuit strong { font-size:14px; }
   .selection-track-section { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:center; margin-top:14px; }
   .selection-map { height:130px; margin:0; padding:6px; }
   .selection-map-caption { font-size:6px; left:6px; bottom:4px; }
@@ -662,7 +659,7 @@ body[data-menu-input="pad"] .stage-select .key-hint { border-radius:10px; border
   .selection-launch-area { margin-inline:-12px; padding-inline:12px; }
   .selection-track-section { gap:10px; }
   .selection-circuit-icon { display:none; }
-  .selection-circuit strong { font-size:15px; }
+  .selection-circuit strong { font-size:13px; }
 }
 @media(pointer:coarse) {
   .selection-keyboard-hints, .selection-label kbd, .selection-dock-keys, #selection-launch .key-hint { display:none; }

@@ -96,7 +96,15 @@ function canvasTexture(width: number, height: number, draw: (c: CanvasRenderingC
  * sails, geodesic glasshouse domes and the Arbor Spire, a city-scale garden
  * tower. Repeated parts are instanced in 384 m cells: many materials, few instances each.
  */
-export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetation, rand: () => number) {
+/** `groundAt` seats each form on the terrain under its footprint (0 in flat cities). */
+export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetation, rand: () => number, groundAt: (x: number, z: number, radius: number) => number = () => 0) {
+  // Every form below is authored from y = 0; `base` lifts the whole form onto its ground.
+  let base = 0;
+  const veg: Vegetation = {
+    tree: (x, y, z, s) => vegetation.tree(x, y + base, z, s),
+    drape: (x, y, z, width, height, angle) => vegetation.drape(x, y + base, z, width, height, angle),
+    shrub: (x, y, z, s) => vegetation.shrub(x, y + base, z, s),
+  };
   const textures: THREE.Texture[] = [];
   const keep = <T extends THREE.Texture>(t: T) => { textures.push(t); return t; };
 
@@ -172,7 +180,7 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
   const batches = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material; matrices: THREE.Matrix4[]; shadow: boolean }>();
   const d = new THREE.Object3D();
   const put = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry = 0, rx = 0, rz = 0, shadow = true) => {
-    d.position.set(x, y, z); d.rotation.set(rx, ry, rz, 'YXZ'); d.scale.set(sx, sy, sz); d.updateMatrix();
+    d.position.set(x, y + base, z); d.rotation.set(rx, ry, rz, 'YXZ'); d.scale.set(sx, sy, sz); d.updateMatrix();
     const key = `${geometry.uuid}|${material.uuid}|${shadow}`;
     let batch = batches.get(key); if (!batch) batches.set(key, batch = { geometry, material, matrices: [], shadow });
     batch.matrices.push(d.matrix.clone());
@@ -195,8 +203,8 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
       if (detailed && f % 3 === 1) {
         // A balcony tree on the planted rim, sometimes trailing vines to the floor below.
         const k = rand() * Math.PI * 2, p = frameOf(x, z, a)(Math.cos(k) * (s + 1.6) / 2, Math.sin(k) * (s * .82 + 1.6) / 2);
-        vegetation.tree(p.x, y + .85, p.y, .34 + rand() * .12);
-        if (rand() < .5) vegetation.drape(p.x, y + .6, p.y, 2.2, 4 + rand() * 4, a - k + Math.PI / 2);
+        veg.tree(p.x, y + .85, p.y, .34 + rand() * .12);
+        if (rand() < .5) veg.drape(p.x, y + .6, p.y, 2.2, 4 + rand() * 4, a - k + Math.PI / 2);
       }
     }
     const top = floors * FLOOR, s = w * (1 - taper);
@@ -206,7 +214,7 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
       put(box, copper, x + Math.cos(a) * s * .45, top + 4, z + Math.sin(a) * s * .38, .35, 8, .35, -a);
     }
     put(disc, photovoltaic, x, top + 8.2, z, s * .62, .18, s * .52, angle + floors * twist, -.12);
-    for (let k = 0; k < 3; k++) vegetation.tree(x + (rand() - .5) * s * .4, top + .6, z + (rand() - .5) * s * .3, .5 + rand() * .2);
+    for (let k = 0; k < 3; k++) veg.tree(x + (rand() - .5) * s * .4, top + .6, z + (rand() - .5) * s * .3, .5 + rand() * .2);
   };
 
   /** Mediterranean hill block: stacked, set-back tiers in warm render, every step a garden with a pergola. */
@@ -236,18 +244,18 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
         if (detailed) {
           for (let u = -tw * .38; u <= tw * .38; u += 4.5 + rand() * 3) {
             const tree = at(u, fv + (rand() - .5) * frontGap * .4);
-            if (rand() < .5) vegetation.tree(tree.x, y + h + .7, tree.y, .42 + rand() * .2);
-            else vegetation.shrub(tree.x, y + h + 1, tree.y, 1.4);
+            if (rand() < .5) veg.tree(tree.x, y + h + .7, tree.y, .42 + rand() * .2);
+            else veg.shrub(tree.x, y + h + 1, tree.y, 1.4);
           }
           const vine = at((rand() - .5) * tw * .5, back + td / 2 + .2);
-          vegetation.drape(vine.x, y + h + .4, vine.y, tw * .45, h * (.5 + rand() * .6), angle);
+          veg.drape(vine.x, y + h + .4, vine.y, tw * .45, h * (.5 + rand() * .6), angle);
         }
       } else {
         // Crown: a small solar pavilion and rooftop trees.
         const c = at(0, back);
         put(box, copper, c.x, y + h + 2.6, c.y, tw * .5, .12, td * .45, angle, 0, 0, false);
         put(box, photovoltaic, c.x, y + h + 2.8, c.y, tw * .48, .06, td * .42, angle, -.18);
-        if (detailed) vegetation.tree(c.x + (rand() - .5) * tw * .3, y + h + .3, c.y + (rand() - .5) * td * .3, .55);
+        if (detailed) veg.tree(c.x + (rand() - .5) * tw * .3, y + h + .3, c.y + (rand() - .5) * td * .3, .55);
       }
     }
   };
@@ -264,7 +272,7 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
     }
     for (let y = FLOOR * 6; y < height - 6; y += FLOOR * 6) put(cylinder, planted, x, y, z, rx + 1.4, .7, rz + 1.4, angle);
     put(cylinder, slab, x, height + .4, z, rx + .8, .8, rz + .8, angle);
-    for (let k = 0; k < 3; k++) vegetation.tree(x + (rand() - .5) * rx, height + .8, z + (rand() - .5) * rz, .6);
+    for (let k = 0; k < 3; k++) veg.tree(x + (rand() - .5) * rx, height + .8, z + (rand() - .5) * rz, .6);
     // The sail leans off the crown like a sun collector turned to the south-west.
     put(sail, photovoltaic, x + co * rx * .2, height + w * .42, z - si * rx * .2, w * .9, w * .75, w * .9, angle + Math.PI * .5, .28);
     for (const side of [-1, 1]) put(box, copper, x + co * side * rx * .5, height + w * .2, z - si * side * rx * .5, .5, w * .45, .5, angle, .3 * side);
@@ -280,7 +288,7 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
       put(dome, domeGlass, p.x, 1.2, p.y, r, r * .92, r, rand() * Math.PI);
       put(cylinder, copper, p.x, 1.35, p.y, r * 1.02, .3, r * 1.02);
     }
-    for (let k = 0; k < 6; k++) { const a = rand() * Math.PI * 2, r = radius * (.85 + rand() * .2), p = at(Math.cos(a) * r, Math.sin(a) * r * .8); vegetation.tree(p.x, 1.2, p.y, .7 + rand() * .3); }
+    for (let k = 0; k < 6; k++) { const a = rand() * Math.PI * 2, r = radius * (.85 + rand() * .2), p = at(Math.cos(a) * r, Math.sin(a) * r * .8); veg.tree(p.x, 1.2, p.y, .7 + rand() * .3); }
   };
 
   const fallMeshes: THREE.Mesh[] = [];
@@ -291,7 +299,7 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
    * garden into the pool. Seen above the skyline from most of the lap.
    */
   const arborSpire = (x: number, z: number, scale = 1) => {
-    const root = new THREE.Group(); root.name = 'solar-arbor-spire'; root.position.set(x, 0, z); parent.add(root);
+    const root = new THREE.Group(); root.name = 'solar-arbor-spire'; root.position.set(x, base, z); parent.add(root);
     const height = 250 * scale, trunk = 10 * scale, spread = 36 * scale;
     const white = new THREE.MeshStandardMaterial({ name: 'solar-spire-column', color: 0xf4f1e9, roughness: .45, metalness: .05 });
     const own: THREE.Material[] = [white];
@@ -317,11 +325,11 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
       put(band, copper, x, y + .2, z, r * 1.01, 2.2, r * 1.01, 0, 0, 0, false);
       for (let k = 0; k < Math.round(r / 3); k++) {
         const a = rand() * Math.PI * 2, rr = Math.sqrt(rand()) * r * .85;
-        vegetation.tree(x + Math.cos(a) * rr, y + 1.4, z + Math.sin(a) * rr, (.8 + rand() * .5) * scale);
+        veg.tree(x + Math.cos(a) * rr, y + 1.4, z + Math.sin(a) * rr, (.8 + rand() * .5) * scale);
       }
       for (let k = 0; k < 12; k++) {
         const a = k / 12 * Math.PI * 2 + fraction;
-        vegetation.drape(x + Math.cos(a) * r * .98, y + .6, z + Math.sin(a) * r * .98, 5 * scale, (8 + rand() * 12) * scale, -a + Math.PI / 2);
+        veg.drape(x + Math.cos(a) * r * .98, y + .6, z + Math.sin(a) * r * .98, 5 * scale, (8 + rand() * 12) * scale, -a + Math.PI / 2);
       }
       // Petals above each garden, tilted up and out like leaves to the sun.
       const petals = Math.round(r / 3.4), length = r * 1.05;
@@ -377,5 +385,11 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
     for (const m of [...walls, glassCool, glassWarm, slab, planted, copper, timber, photovoltaic, domeGlass, water, fallMaterial]) m.dispose();
     parent.traverse(o => (o.userData.dispose as (() => void) | undefined)?.());
   };
-  return { helixTower, terraceHill, sailTower, domeCluster, arborSpire, finish, update, dispose };
+  const grounded = <A extends unknown[], R>(form: (x: number, z: number, ...rest: A) => R, radius: (...rest: A) => number) =>
+    (x: number, z: number, ...rest: A): R => { base = groundAt(x, z, radius(...rest)); try { return form(x, z, ...rest); } finally { base = 0; } };
+  return {
+    helixTower: grounded(helixTower, w => w * .8), terraceHill: grounded(terraceHill, (w, depth) => Math.max(w, depth) * .6),
+    sailTower: grounded(sailTower, w => w * .6), domeCluster: grounded(domeCluster, radius => radius), arborSpire: grounded(arborSpire, (scale = 1) => 22 * scale),
+    finish, update, dispose,
+  };
 }

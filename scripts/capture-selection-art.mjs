@@ -2,7 +2,7 @@
 // Each world is shot with the cinematic quality tier: a low, long-lens hero
 // angle with the car on the right third so the menu copy owns the left side.
 import { chromium } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 
 await mkdir('artifacts/menu-source', { recursive: true });
@@ -52,7 +52,10 @@ try {
     await page.screenshot({ path: `artifacts/menu-source/${view.stage}-hero.png` });
     await page.close();
   }
-  await writeFile('artifacts/menu-source/maps.json', JSON.stringify(maps));
+  // Keep outlines added by import-layouts.mjs; this capture refreshes Neon and Kairo.
+  let existing = {};
+  try { existing = JSON.parse(await readFile('artifacts/menu-source/maps.json', 'utf8')); } catch { /* first capture */ }
+  await writeFile('artifacts/menu-source/maps.json', JSON.stringify({ ...existing, ...maps }));
 } finally { await browser.close(); }
 
 for (const view of views) {

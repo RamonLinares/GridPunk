@@ -347,8 +347,8 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
   return {
     archetypes: built.map(({ name, w, d, r }) => ({ name, w, d, r })),
     /** Records one instance; returns its chimney and valve outlets in world space. */
-    place(style: number, x: number, z: number, angle: number) {
-      const a = built[style], matrix = new THREE.Matrix4().makeRotationY(angle).setPosition(x, 0, z);
+    place(style: number, x: number, z: number, angle: number, y = 0) {
+      const a = built[style], matrix = new THREE.Matrix4().makeRotationY(angle).setPosition(x, y, z);
       placements[style].push(matrix); placed.push({ x, z, r: a.r, style, angle });
       for (const g of a.gears) gearBases.push({ matrix: matrix.clone().multiply(new THREE.Matrix4().makeRotationY(g.yaw).setPosition(...g.p)).scale(new THREE.Vector3(g.r, g.r, g.r * .9)), rate: g.rate });
       const yaw = new THREE.Matrix4().makeRotationY(angle);

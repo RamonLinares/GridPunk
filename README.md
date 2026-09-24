@@ -1,6 +1,6 @@
 # GridPunk
 
-A racing game with three stages: **Cyberpunk**, **Solarpunk**, and **Steampunk**. Each stage contains **Neon District** (3.744 km, 12 corners) and **Kairo Loop** (5.807 km, 18 corners). Three laps, six cars, and independent lap records for all six stage/circuit combinations.
+A racing game with three stages: **Cyberpunk**, **Solarpunk**, and **Steampunk**. Each stage contains **Neon District** (3.744 km, 12 corners), **Kairo Loop** (5.807 km, 18 corners) and six hilly layouts with their surveyed climbs: **Mirage Streets**, **Cinder Bend**, **Sable Ring**, **Orbit Bowl**, **Zenith Park** and **Talon Run** ([details](docs/imported-layouts.md)). Three laps, six cars, and independent lap records for all 24 stage/circuit combinations.
 
 [Play GridPunk](https://gridpunk.smallweblab.com/) · [GitHub repository](https://github.com/RamonLinares/GridPunk)
 

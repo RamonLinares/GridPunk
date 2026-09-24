@@ -31,12 +31,14 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     let batch = batches.get(key); if (!batch) { batch = { geo, mat, matrices: [] }; batches.set(key, batch); }
     batch.matrices.push(dummy.matrix.clone());
   };
-  const localKit = (x: number, z: number, angle: number) => {
+  // Footprints sit on the terrain at their lowest point (0 in flat cities).
+  const localKit = (x: number, z: number, angle: number, radius = 0) => {
+    const ground = builder.groundAt(x, z, radius);
     const co = Math.cos(angle), si = Math.sin(angle), yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
     return (geo: THREE.BufferGeometry, mat: THREE.Material, u: number, y: number, v: number, w: number, h: number, d: number, rotation = [0, 0, 0]) => {
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation as [number, number, number])).premultiply(yaw);
       const e = new THREE.Euler().setFromQuaternion(q);
-      part(geo, mat, [x + co * u + si * v, y, z - si * u + co * v], [w, h, d], [e.x, e.y, e.z]);
+      part(geo, mat, [x + co * u + si * v, y + ground, z - si * u + co * v], [w, h, d], [e.x, e.y, e.z]);
     };
   };
   const clearance = grandstandTrackClearance(spline.samples);
@@ -47,7 +49,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     for (const shift of [0, .015, -.015, .03]) {
       if (found) break;
       const progress = spec.progress + shift, s = spline.sampleAt(Math.round(progress * spline.count));
-      if (s.position.y > .3) continue;
+      if ((spline.circuit.surfaceLiftAt?.(progress) ?? 0) > .3) continue;
       for (const side of [1, -1]) {
         if (found) break;
         for (let offset = spec.r + 20; offset < spec.r + 85; offset += 8) {
@@ -105,16 +107,16 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (site.kind === 'brassworks') {
       // Brass & Co. is a fully modelled set piece with its own plaza.
       brassWorks = createBrassWorks(m, kit);
-      brassWorks.root.position.set(site.x, 0, site.z); brassWorks.root.rotation.y = site.angle;
+      brassWorks.root.position.set(site.x, builder.groundAt(site.x, site.z, site.r), site.z); brassWorks.root.rotation.y = site.angle;
       group.add(brassWorks.root); brassWorks.root.updateMatrixWorld(true);
       for (const vent of brassWorks.vents) vents.push(brassWorks.root.localToWorld(vent.clone()));
       animated.push(...brassWorks.gears);
       continue;
     }
-    const rawLocal = localKit(site.x, site.z, site.angle), heightScale = site.kind === 'clockworks' ? .75 : 1;
+    const rawLocal = localKit(site.x, site.z, site.angle, site.r), heightScale = site.kind === 'clockworks' ? .75 : 1, siteGround = builder.groundAt(site.x, site.z, site.r);
     const local: typeof rawLocal = (geo, mat, u, y, v, w, h, d, rotation) => rawLocal(geo, mat, u, y * heightScale, v, w, h * heightScale, d, rotation);
     local(cylinder, m.stone, 0, .4, 0, site.r - 1, .8, site.r - 1);
-    const world = (u: number, y: number, v: number) => new THREE.Vector3(u, y * heightScale, v).applyAxisAngle(new THREE.Vector3(0, 1, 0), site.angle).add(new THREE.Vector3(site.x, 0, site.z));
+    const world = (u: number, y: number, v: number) => new THREE.Vector3(u, y * heightScale, v).applyAxisAngle(new THREE.Vector3(0, 1, 0), site.angle).add(new THREE.Vector3(site.x, siteGround, site.z));
     if (site.kind === 'clockworks') {
       local(box, m.facade, 0, 22, 0, 16, 44, 16);
       for (const y of [2, 14, 28, 41, 45, 57]) local(box, m.stone, 0, y, 0, y > 40 ? 20 : 17.5, .8, y > 40 ? 20 : 17.5);
@@ -177,7 +179,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (reserved(x, z, r) || clearance(x, z) < r + 15 || occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + r + 2)) return;
     const index = buildingFootprints.length, style = index % 6;
     occupied.push({ x, z, r }); buildingFootprints.push({ x, z, r, style, near: false });
-    const local = localKit(x, z, angle);
+    const local = localKit(x, z, angle, r);
     const { roofHeight } = buildingKit.build(local, w, d, h, index, false);
     if (style === 1 || style === 5) {
       const chimneyHeight = 10 + rand() * 14, u = w * .30, v = -d * .27;
@@ -197,7 +199,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const p = s.position.clone().addScaledVector(s.right, side * (r + 17)), angle = Math.atan2(-side * s.right.x, -side * s.right.z);
       if (reserved(p.x, p.z, r) || clearance(p.x, p.z) < r + 15 || occupied.some(o => Math.hypot(p.x - o.x, p.z - o.z) < o.r + r + 2)) continue;
       occupied.push({ x: p.x, z: p.z, r }); buildingFootprints.push({ x: p.x, z: p.z, r, style: 6 + style, near: true });
-      const { vents: stacks, valves } = street.place(style, p.x, p.z, angle);
+      const { vents: stacks, valves } = street.place(style, p.x, p.z, angle, builder.groundAt(p.x, p.z, r));
       vents.push(...stacks); pressureVents.push(...valves);
       streetIndex++;
     }
@@ -226,7 +228,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
   for (const progress of [.11, .32, .65, .94]) {
     const s = spline.sampleAt(Math.round(progress * spline.count)), angle = Math.atan2(s.tangent.x, s.tangent.z);
     const support = [-1, 1].map(side => s.position.clone().addScaledVector(s.right, side * 18));
-    if (support.some(p => clearance(p.x, p.z) < 16) || s.position.y > .3) continue;
+    if (support.some(p => clearance(p.x, p.z) < 16) || (spline.circuit.surfaceLiftAt?.(progress) ?? 0) > .3) continue;
     const bridge = new THREE.Group(); bridge.name = 'steam-pipe-gantry'; bridge.userData.intentionalOverpass = true;
     bridge.position.copy(s.position); bridge.rotation.y = angle; group.add(bridge);
     const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material, p: number[], scale: number[], rotation = [0, 0, 0]) => {

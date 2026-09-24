@@ -69,7 +69,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   };
   const vegetation = createSolarVegetation(group, rand);
   const tree = vegetation.tree;
-  const architecture = createSolarArchitecture(group, vegetation, rand);
+  const architecture = createSolarArchitecture(group, vegetation, rand, (x, z, radius) => builder.groundAt(x, z, radius));
 
   // --- Printed graphics: flags, façade slogans. ---
   const leaf = (c: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) => {
@@ -118,9 +118,10 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const wall = walls[Math.floor(rand() * walls.length)];
     const windowedWall = wall === plasterWarm ? facades.warm : rand() < .5 ? facades.tints[Math.floor(rand() * facades.tints.length)] : facades.cool;
     const detailed = near || builder.distanceToTrack(x, z) < 110;
-    const world = (u: number, v: number) => new THREE.Vector3(x + co * u + si * v, 0, z - si * u + co * v);
+    const ground = builder.groundAt(x, z, radius);
+    const world = (u: number, v: number) => new THREE.Vector3(x + co * u + si * v, ground, z - si * u + co * v);
     const local = (material: THREE.Material, u: number, y: number, v: number, sw: number, sh: number, sd: number, tilt = 0) =>
-      block(material, x + co * u + si * v, y, z - si * u + co * v, sw, sh, sd, angle, tilt);
+      block(material, x + co * u + si * v, y + ground, z - si * u + co * v, sw, sh, sd, angle, tilt);
     // Signature forms break the repeated glass-slab kit: stepped Mediterranean hill
     // blocks along the street, glasshouse domes and hill blocks through the city.
     const pickStyle = rand();
@@ -246,9 +247,9 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
 
   // Civic districts get deliberate sightlines before the repeating street fronts.
   const landmarkSites = solarLandmarkSites(spline, occupied);
-  const landmarks = createSolarLandmarks(landmarkSites, vegetation, spline.circuit.shortName); group.add(landmarks.group);
+  const landmarks = createSolarLandmarks(landmarkSites, vegetation, spline.circuit.shortName, (x, z, radius) => builder.groundAt(x, z, radius)); group.add(landmarks.group);
   occupied.push(...landmarkSites.map(site => ({ x: site.x, z: site.z, r: site.r + 12 })));
-  const skyLife = createSolarSkyLife(spline, occupied); group.add(skyLife.group);
+  const skyLife = createSolarSkyLife(spline, occupied, (x, z, radius) => builder.groundAt(x, z, radius)); group.add(skyLife.group);
   occupied.push(...skyLife.sites);
   const viewSites = [...landmarkSites, ...skyLife.sites];
   const landmarkViewReserved = (x: number, z: number, radius: number) => viewSites.some(site => {
@@ -304,22 +305,22 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const s = spline.sampleAt(i), lift = liftAt(i / spline.count), angle = Math.atan2(s.tangent.x, s.tangent.z);
     if (lift > .3) continue;
     for (const side of [-1, 1]) {
-      const h = s.position.clone().addScaledVector(s.right, side * 13.3);
-      block(concrete, h.x, .38, h.z, 1.2, .76, sampleStep * 2 + .15, angle);
+      const h = s.position.clone().addScaledVector(s.right, side * 13.3), g = builder.groundAt(h.x, h.z);
+      block(concrete, h.x, .38 + g, h.z, 1.2, .76, sampleStep * 2 + .15, angle);
       for (let along=-sampleStep;along<sampleStep;along+=1.6) {
         const shrubPoint=h.clone().addScaledVector(s.tangent,along);
-        vegetation.shrub(shrubPoint.x, .9, shrubPoint.z, 1.15);
+        vegetation.shrub(shrubPoint.x, .9 + g, shrubPoint.z, 1.15);
       }
       for (let k = 0; k < 12; k++) {
         const f = s.position.clone().addScaledVector(s.right, side * (12.95 + rand() * .7)).addScaledVector(s.tangent, (rand() - .5) * sampleStep * 2);
-        block(flowers[Math.floor(rand() * flowers.length)], f.x, 1.36, f.z, .10 + rand() * .10, .07 + rand() * .05, .10 + rand() * .10, rand() * Math.PI);
+        block(flowers[Math.floor(rand() * flowers.length)], f.x, 1.36 + g, f.z, .10 + rand() * .10, .07 + rand() * .05, .10 + rand() * .10, rand() * Math.PI);
       }
       if (rand() < .55) {
         // Flowering shrubs and grasses behind the hedge, tall enough to clear the wall.
         const b = s.position.clone().addScaledVector(s.right, side * (14.3 + rand() * .6)).addScaledVector(s.tangent, (rand() - .5) * sampleStep * 1.6);
-        const height = 1.5 + rand() * 1.1, width = 1 + rand() * .8;
-        vegetation.shrub(b.x, height / 2, b.z, width);
-        for (let petal = 0; petal < 9; petal++) block(flowers[Math.floor(rand() * flowers.length)], b.x + (rand() - .5) * width, height / 2 + .15 + rand() * .35, b.z + (rand() - .5) * width, .15, .1, .15);
+        const height = 1.5 + rand() * 1.1, width = 1 + rand() * .8, bg = builder.groundAt(b.x, b.z);
+        vegetation.shrub(b.x, height / 2 + bg, b.z, width);
+        for (let petal = 0; petal < 9; petal++) block(flowers[Math.floor(rand() * flowers.length)], b.x + (rand() - .5) * width, height / 2 + .15 + rand() * .35 + bg, b.z + (rand() - .5) * width, .15, .1, .15);
       }
     }
   }
@@ -329,7 +330,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const p = s.position.clone().addScaledVector(s.right, side * (15.5 + rand() * .6)).addScaledVector(s.tangent, (rand() - .5) * 2);
       if (builder.distanceToTrack(p.x, p.z) < 15.1 || grandstands.some(stand => stand.contains(p.x,p.z,3))) continue;
       if (landmarkViewReserved(p.x, p.z, 3)) continue;
-      const ground = spline.circuit.layout === 'neon' ? 0 : lift > .3 ? p.y - lift : p.y;
+      const ground = spline.circuit.terrainFollow ? builder.groundAt(p.x, p.z) : spline.circuit.layout === 'neon' ? 0 : lift > .3 ? p.y - lift : p.y;
       tree(p.x, ground, p.z, lift > .3 ? .7 : 1.4 + rand() * .5);
     }
   }
@@ -361,7 +362,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (builder.distanceToTrack(x, z) < 22) continue;
     if (landmarkViewReserved(x, z, 3)) continue;
     if (occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + 3)) continue;
-    tree(x, 0, z, .8 + rand() * .7);
+    tree(x, builder.groundAt(x, z), z, .8 + rand() * .7);
   }
   // Solar farms on open ground.
   let farms = 0;
@@ -373,9 +374,9 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const co = Math.cos(angle), si = Math.sin(angle);
     for (let r = -4; r <= 4; r++) for (let c = -6; c <= 6; c++) {
       const u = c * 4.4, v = r * 6.5;
-      const px = x + co * u + si * v, pz = z - si * u + co * v;
-      block(frame, px, .7, pz, .18, 1.4, .18, angle);
-      block(solarPanel, px, 1.35, pz, 4.1, .06, 2.4, angle, -.42);
+      const px = x + co * u + si * v, pz = z - si * u + co * v, g = builder.groundAt(px, pz);
+      block(frame, px, .7 + g, pz, .18, 1.4, .18, angle);
+      block(solarPanel, px, 1.35 + g, pz, 4.1, .06, 2.4, angle, -.42);
     }
     farms++;
   }
@@ -427,14 +428,17 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       x=p.x;z=p.z;
     }
     if (builder.distanceToTrack(x, z) < 100) continue;
-    const t = new THREE.Group(); t.name = 'solar-wind-turbine'; t.position.set(x, 0, z); t.rotation.y = rand() * Math.PI * 2; if(k<3)t.scale.setScalar(1.35);
+    const t = new THREE.Group(); t.name = 'solar-wind-turbine'; t.position.set(x, builder.groundAt(x, z, 3), z); t.rotation.y = rand() * Math.PI * 2; if(k<3)t.scale.setScalar(1.35);
     const mast = new THREE.Mesh(tower, white); mast.position.y = 39; mast.castShadow = true; t.add(mast);
     const head = new THREE.Mesh(nacelle, white); head.position.set(0, 78, 0); t.add(head);
     const rotor = new THREE.Group(); rotor.position.set(0, 78, 2.6); rotor.rotation.z = rand() * Math.PI * 2; rotor.userData.rate = .5 + rand() * .3;
     for (let b = 0; b < 3; b++) { const m = new THREE.Mesh(blade, white); m.position.y = 15.5; const pivot = new THREE.Group(); pivot.rotation.z = b * Math.PI * 2 / 3; pivot.add(m); rotor.add(pivot); }
     t.add(rotor); t.userData.rotor = rotor; group.add(t); turbines.push(t);
   }
-  group.add(createSolarBay(spline.samples.map(sample => sample.position)));
+  // The bay is a sea-level plane: only flat cities have a waterfront.
+  if (!spline.circuit.terrainFollow) group.add(createSolarBay(spline.samples.map(sample => sample.position)));
+  // Hilly layouts settle to a plain; the far ranges rise from its level.
+  const plainLevel = spline.circuit.terrainFollow ? builder.groundAt(centre.x + 1e6, centre.z) : 0;
   const ridge = (radius: number, base: number, amplitude: number, low: number, high: number, phase: number) => {
     const segments = 512, rows = 10, positions: number[] = [], colors: number[] = [], indices: number[] = [];
     const lowColor = new THREE.Color(low), highColor = new THREE.Color(high), snow = new THREE.Color(0xdfe5ea), c = new THREE.Color();
@@ -448,11 +452,11 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const profile = Math.sin(radial * Math.PI);
       // Ridged harmonics break the long smooth flanks into spurs, gullies and saddles.
       const ridged = 1 - Math.abs(Math.sin(a * 23 + phase * 2 + radial * 3.1));
-      const h = -8 + Math.pow(profile,1.2) * (base + amplitude * peak * teeth) * (1 - bay * .5) * (.78 + .32 * ridged)
+      const h = plainLevel - 8 + Math.pow(profile,1.2) * (base + amplitude * peak * teeth) * (1 - bay * .5) * (.78 + .32 * ridged)
         + Math.sin(a * 71 + radial * 17) * profile * 13 + Math.sin(a * 131 + radial * 29) * profile * 7;
       positions.push(centre.x + Math.cos(a) * r,h,centre.z + Math.sin(a) * r);
-      c.copy(lowColor).lerp(highColor, Math.min(1,h/(base+amplitude)*1.6));
-      c.lerp(snow, THREE.MathUtils.smoothstep(h + Math.sin(a*61)*26 + Math.sin(a*149)*12,base+amplitude*.52,base+amplitude*.8)*.85);
+      c.copy(lowColor).lerp(highColor, Math.min(1,(h - plainLevel)/(base+amplitude)*1.6));
+      c.lerp(snow, THREE.MathUtils.smoothstep(h - plainLevel + Math.sin(a*61)*26 + Math.sin(a*149)*12,base+amplitude*.52,base+amplitude*.8)*.85);
       c.multiplyScalar(.79 + .21 * Math.sin(a*53+radial*12)**2);
       colors.push(c.r,c.g,c.b);
       if(row>0&&i>0) {

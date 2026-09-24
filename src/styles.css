@@ -2317,7 +2317,7 @@ body.replay-active #hud-root,body.replay-active #session-toolbar,body.replay-act
 .stage-picker .assist-row [data-stage="solarpunk"] { --stage-color:#c4e69f; }
 .stage-picker .assist-row [data-stage="steampunk"] { --stage-color:#e5be80; }
 .stage-picker .assist-row button.active { color:var(--stage-color); border-color:var(--stage-color); background:rgba(30,42,43,.8); }
-.circuit-picker .assist-row button { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:5px; min-height:56px; padding:10px; }
+.circuit-picker .assist-row button { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; min-height:44px; padding:7px 10px; }
 .circuit-picker .assist-row small { font-size:8px; letter-spacing:.03em; font-weight:400; opacity:.7; }
 @media(max-width:600px) {
   .stage-picker .assist-row button { font-size:9px; }

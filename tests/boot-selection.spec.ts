@@ -11,7 +11,7 @@ test('race selection stays lightweight until launch, then loads the chosen world
   await expect(page.locator('#stage-select')).toBeVisible();
   await expect(page.locator('#game-canvas')).toBeHidden();
   await expect(page.locator('[data-select-stage]')).toHaveCount(3);
-  await expect(page.locator('[data-select-layout]')).toHaveCount(2);
+  await expect(page.locator('[data-select-layout]')).toHaveCount(8);
   expect(await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__)).toBeUndefined();
   expect(requests.filter(path => path.startsWith('/assets/main-') || path.startsWith('/assets/src-') || path.startsWith('/circuits/'))).toEqual([]);
 
@@ -90,4 +90,14 @@ test('keyboard shortcuts browse worlds and circuits, and Enter starts the race',
   await expect(page.locator('[data-select-stage="solarpunk"]')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.circuit === 'solar' && document.querySelector<HTMLElement>('#loading')?.hidden);
+});
+
+test('imported layouts launch in every stage with their fictional names', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-select-stage="steampunk"]').click();
+  await page.locator('[data-select-layout="talon"]').click();
+  await expect(page.locator('#selection-name')).toHaveText('Steampunk · Talon Run');
+  await page.locator('#selection-launch').click();
+  await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.circuit === 'talon-steam' && document.querySelector<HTMLElement>('#loading')?.hidden);
+  await expect(page).toHaveTitle('GridPunk — Talon Steam');
 });

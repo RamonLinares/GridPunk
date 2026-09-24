@@ -275,17 +275,16 @@ function render(): void {
   }
 
   if (renderedLayout !== layout) {
-    circuits.innerHTML = LAYOUT_CHOICES.map((option, index) => {
+    circuits.innerHTML = LAYOUT_CHOICES.map(option => {
       const map = SELECTION_MAPS[option.id];
       return `
       <button type="button" class="selection-circuit ${option.id === layout ? 'is-selected' : ''}" data-select-layout="${option.id}" aria-pressed="${option.id === layout}">
         <svg class="selection-circuit-icon" viewBox="0 0 280 180" aria-hidden="true"><path d="${map.path}"/></svg>
-        <span class="selection-circuit-copy"><span class="selection-route-number">ROUTE 0${index + 1}</span><strong>${option.name}</strong></span>
-        <span class="selection-circuit-length">${option.length}<small>KM</small></span>
+        <span class="selection-circuit-copy"><strong>${option.name}</strong><small>${option.length} KM · ${option.corners} T</small></span>
       </button>`;
     }).join('');
     const map = SELECTION_MAPS[layout];
-    const lapSeconds = layout === 'kairo' ? 9 : 6.5;
+    const lapSeconds = 6.5 * Number(selectedLayout.length) / 3.744;
     document.querySelector('#selection-map')!.innerHTML = `
       <svg viewBox="0 0 280 180" role="img" aria-label="${selectedLayout.name} circuit layout">
         <path id="selection-map-line" class="selection-map-shadow" d="${map.path}"/>
@@ -356,7 +355,7 @@ function prepareLoading(id: string): void {
   document.querySelector('#loading-title')!.textContent = CIRCUIT_TITLES[id] ?? selectedLayout.name;
   document.querySelector('#loading-specs')!.textContent = `${selectedLayout.length} KM · ${selectedLayout.corners} CORNERS · 3 LAPS · 6 CARS`;
   document.querySelector('#loading-tip')!.textContent = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
-  document.querySelector('#loading-map')!.innerHTML = `<svg viewBox="0 0 280 180"><path id="loading-map-line" class="map-base" d="${map.path}"/><path class="map-line" d="${map.path}" pathLength="1"/><g><circle class="map-halo" r="7"/><circle class="map-car" r="3.2"/><animateMotion dur="${layout === 'kairo' ? 9 : 6.5}s" repeatCount="indefinite"><mpath href="#loading-map-line"/></animateMotion></g></svg>`;
+  document.querySelector('#loading-map')!.innerHTML = `<svg viewBox="0 0 280 180"><path id="loading-map-line" class="map-base" d="${map.path}"/><path class="map-line" d="${map.path}" pathLength="1"/><g><circle class="map-halo" r="7"/><circle class="map-car" r="3.2"/><animateMotion dur="${6.5 * Number(selectedLayout.length) / 3.744}s" repeatCount="indefinite"><mpath href="#loading-map-line"/></animateMotion></g></svg>`;
   const art = document.querySelector<HTMLImageElement>('#loading-art')!;
   art.onload = () => art.classList.add('is-ready');
   art.sizes = '(max-width: 900px) 960px, 100vw';

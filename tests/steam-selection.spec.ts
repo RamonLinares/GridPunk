@@ -7,7 +7,7 @@ test('Steam can be selected from Solar without losing the car or sharing lap rec
   });
   await page.goto('/?circuit=solar&car=k89&hq&at=.182');
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__ && document.querySelector<HTMLElement>('#loading')?.hidden);
-  await expect(page.locator('[data-circuit]')).toHaveCount(2);
+  await expect(page.locator('[data-circuit]')).toHaveCount(8);
   await expect(page.locator('[data-stage]')).toHaveCount(3);
   const choose = page.locator('[data-stage="steampunk"]');
   if (isMobile) await choose.tap(); else await choose.click();

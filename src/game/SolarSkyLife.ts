@@ -7,7 +7,7 @@ type Plot = { x: number; z: number; r: number };
 export interface SolarTurbineSite extends Plot { progress: number; angle: number }
 
 /** Solar-only skyline props. Static detail is merged by material; only rotors and ships move. */
-export function createSolarSkyLife(spline: TrackSpline, occupied: readonly Plot[]) {
+export function createSolarSkyLife(spline: TrackSpline, occupied: readonly Plot[], groundAt: (x: number, z: number, radius: number) => number = () => 0) {
   const group = new THREE.Group(); group.name = 'solar-sky-life'; group.userData.sceneryContainer = true;
   const ivory = new THREE.MeshStandardMaterial({ color: 0xeee7cd, roughness: .72 });
   const stone = new THREE.MeshStandardMaterial({ color: 0xc9c4ac, roughness: .91 });
@@ -115,7 +115,7 @@ export function createSolarSkyLife(spline: TrackSpline, occupied: readonly Plot[
   blades.add(hub, ivory, [0, 0, .5], [1.55, 1.55, 2.1]); blades.finish();
   rotor.userData.bladeCount = 3;
   const turbines = sites.map((site, index) => {
-    const root = turbine.clone(true); root.position.set(site.x, 0, site.z); root.rotation.y = site.angle;
+    const root = turbine.clone(true); root.position.set(site.x, groundAt(site.x, site.z, 4), site.z); root.rotation.y = site.angle;
     root.userData.site = site; root.userData.phase = index * .8; group.add(root); return root;
   });
 

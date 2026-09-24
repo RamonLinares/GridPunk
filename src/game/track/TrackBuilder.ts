@@ -51,6 +51,19 @@ export class TrackBuilder {
     readonly boundaryCurve: THREE.CatmullRomCurve3;
     /** Terrain surface height at a world XZ position (matches the built mesh). */
     terrainHeightAt: (x: number, z: number) => number = () => 0;
+    /**
+     * Ground under a footprint for scenery: the lowest terrain point across it,
+     * so buildings cut into slopes instead of floating. Flat cities return 0.
+     */
+    groundAt(x: number, z: number, radius = 0): number {
+        if (!this.spline.circuit.terrainFollow)
+            return 0;
+        let lowest = this.terrainHeightAt(x, z);
+        if (radius > 0)
+            for (let k = 0; k < 8; k++)
+                lowest = Math.min(lowest, this.terrainHeightAt(x + Math.cos(k * Math.PI / 4) * radius * .8, z + Math.sin(k * Math.PI / 4) * radius * .8));
+        return lowest;
+    }
     private readonly n: number;
     /** Emissive overlay for the five-lamp start bank; its matrices encode current lamps. */
     private startLightGlow?: THREE.InstancedMesh;
@@ -679,6 +692,10 @@ export class TrackBuilder {
             apron.receiveShadow = true;
             this.group.add(apron);
             this.groundMesh = apron;
+            if (this.spline.circuit.terrainFollow) {
+                this.buildHillTerrain();
+                return;
+            }
             const terrain = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), this.materials.runoffAsphalt);
             terrain.rotation.x = -Math.PI / 2;
             terrain.position.y = -.06;
@@ -688,6 +705,82 @@ export class TrackBuilder {
             this.terrainHeightAt = () => -.06;
             return;
         }
+    }
+    /**
+     * Rolling city terrain for layouts with a surveyed climb. Within ~26 m of
+     * the centreline the ground hugs the road (below its lowest banked edge);
+     * it then blends into a smooth field interpolated from the whole lap, and
+     * eases to a level plain at the edge of the grid.
+     */
+    private buildHillTerrain(): void {
+        const samples = this.spline.samples, cell = 16, margin = 1100, hug = 26, blend = 90;
+        const box = new THREE.Box3().setFromPoints(samples.map(s => s.position));
+        const x0 = Math.floor((box.min.x - margin) / cell) * cell, z0 = Math.floor((box.min.z - margin) / cell) * cell;
+        const nx = Math.ceil((box.max.x + margin - x0) / cell), nz = Math.ceil((box.max.z + margin - z0) / cell);
+        // Road samples (8 m apart) hashed for nearest-road lookup, each with the
+        // lowest height across its banked width.
+        const road: { x: number; z: number; low: number }[] = [], hashSize = 48, hash = new Map<string, number[]>();
+        for (let i = 0; i < samples.length; i += 2) {
+            const s = samples[i], low = s.position.y - Math.abs(s.right.y) * 14 - .35;
+            const key = `${Math.floor(s.position.x / hashSize)},${Math.floor(s.position.z / hashSize)}`;
+            if (!hash.has(key)) hash.set(key, []);
+            hash.get(key)!.push(road.length);
+            road.push({ x: s.position.x, z: s.position.z, low });
+        }
+        const coarse = road.filter((_, i) => i % 5 === 0);
+        const mean = coarse.reduce((sum, p) => sum + p.low, 0) / coarse.length;
+        const heights = new Float32Array((nx + 1) * (nz + 1));
+        for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+            const x = x0 + i * cell, z = z0 + j * cell;
+            let nearest = Infinity, nearLow = 0;
+            const hx = Math.floor(x / hashSize), hz = Math.floor(z / hashSize), reach = Math.ceil(blend / hashSize);
+            for (let a = -reach; a <= reach; a++) for (let b = -reach; b <= reach; b++) {
+                for (const k of hash.get(`${hx + a},${hz + b}`) ?? []) {
+                    const d = Math.hypot(road[k].x - x, road[k].z - z);
+                    if (d < nearest) { nearest = d; nearLow = road[k].low; }
+                }
+            }
+            let weight = 0, field = 0;
+            for (const p of coarse) {
+                const w = 1 / (((p.x - x) ** 2 + (p.z - z) ** 2 + 6400) ** 1.5);
+                weight += w; field += w * p.low;
+            }
+            field /= weight;
+            const edge = Math.min(i, j, nx - i, nz - j) * cell;
+            field = THREE.MathUtils.lerp(mean, field, THREE.MathUtils.smoothstep(edge, 0, 320));
+            heights[j * (nx + 1) + i] = nearest === Infinity ? field : THREE.MathUtils.lerp(nearLow, field, THREE.MathUtils.smoothstep(nearest, hug, blend));
+        }
+        const positions = new Float32Array((nx + 1) * (nz + 1) * 3), uvs = new Float32Array((nx + 1) * (nz + 1) * 2), index: number[] = [];
+        for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+            const v = j * (nx + 1) + i, x = x0 + i * cell, z = z0 + j * cell;
+            positions.set([x, heights[v], z], v * 3);
+            uvs.set([x / 5000 + .5, .5 - z / 5000], v * 2);
+            if (i < nx && j < nz) index.push(v, v + nx + 1, v + 1, v + 1, v + nx + 1, v + nx + 2);
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        geometry.setIndex(index);
+        geometry.computeVertexNormals();
+        const terrain = new THREE.Mesh(geometry, this.materials.runoffAsphalt);
+        terrain.name = 'terrain';
+        terrain.receiveShadow = true;
+        this.group.add(terrain);
+        // Level plain beyond the grid, at the grid's settled edge height.
+        const plain = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), this.materials.runoffAsphalt);
+        plain.rotation.x = -Math.PI / 2;
+        plain.position.set(x0 + nx * cell / 2, mean - .2, z0 + nz * cell / 2);
+        plain.name = 'terrain-plain';
+        plain.receiveShadow = true;
+        this.group.add(plain);
+        this.terrainHeightAt = (x: number, z: number) => {
+            const fx = THREE.MathUtils.clamp((x - x0) / cell, 0, nx - 1e-6), fz = THREE.MathUtils.clamp((z - z0) / cell, 0, nz - 1e-6);
+            const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, w = fz - j, at = (a: number, b: number) => heights[b * (nx + 1) + a];
+            // Match the mesh's triangle split (v, v+row, v+1 / v+1, v+row, v+row+1).
+            return u + w <= 1
+                ? at(i, j) + (at(i + 1, j) - at(i, j)) * u + (at(i, j + 1) - at(i, j)) * w
+                : at(i + 1, j + 1) + (at(i, j + 1) - at(i + 1, j + 1)) * (1 - u) + (at(i + 1, j) - at(i + 1, j + 1)) * (1 - w);
+        };
     }
     private buildBarriers(): void {
         {

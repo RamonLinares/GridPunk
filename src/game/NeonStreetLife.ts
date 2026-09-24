@@ -16,7 +16,7 @@ export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THR
  const lampPositions:THREE.Vector3[]=[];
  for(let i=3;i<builder.spline.count;i+=11){
   if(neonTunnelAt(i/builder.spline.count))continue;
-  const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*14.8);base.y=builder.spline.circuit.gradeSeparated?s.position.y:0;
+  const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*14.8);base.y=builder.spline.circuit.gradeSeparated?s.position.y:builder.groundAt(base.x,base.z);
   if(builder.distanceToTrack(base.x,base.z)<13.8)continue;
   const angle=Math.atan2(s.tangent.x,s.tangent.z);
   const at=(u:number,y:number)=>base.clone().addScaledVector(s.right,u).add(new THREE.Vector3(0,y,0));

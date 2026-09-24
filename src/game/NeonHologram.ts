@@ -14,7 +14,7 @@ export function createNeonHologram(parent: THREE.Group, lights: NeonAtmosphereLi
   const kairo = builder.spline.circuitId === 'kairo';
   const primary = createProjectionSet(parent, lights, builder, kairo
     ? {kind:'ramen', height:24, elevation:21, offset:0, brightness:1.4, radiance:[.09,.3,.55], stations:[.04,.48]}
-    : {kind:'geisha', height:27, elevation:25.5, offset:6, brightness:1, radiance:[.09,.3,.55], stations:[null,.48]});
+    : {kind:'geisha', height:27, elevation:25.5, offset:6, brightness:1, radiance:[.09,.3,.55], stations:[builder.spline.circuitId === 'neon' ? null : .04,.48]});
   const secondary = createProjectionSet(parent, lights, builder, kairo
     ? {kind:'bonsai', height:20, elevation:15.5, offset:0, brightness:2.3, radiance:[.08,.48,.16], stations:[.27,.75]}
     : {kind:'koi', height:20, elevation:15.5, offset:0, brightness:1.85, radiance:[.117,.39,.715], stations:[.27,.75]});

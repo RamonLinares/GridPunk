@@ -28,7 +28,7 @@ export function solarLandmarkSites(spline: TrackSpline, occupied: readonly { x: 
     for (const shift of [0, .012, -.012, .024, -.024]) {
       if (placed) break;
       const progress = spec.progress + shift, s = spline.sampleAt(Math.round(progress * spline.count));
-      if (s.position.y > .3) continue;
+      if ((spline.circuit.surfaceLiftAt?.(progress) ?? 0) > .3) continue;
       for (const side of [spec.side, -spec.side]) {
         if (placed) break;
         for (let offset = spec.r + 19; offset < spec.r + 65; offset += 5) {
@@ -48,7 +48,7 @@ export function solarLandmarkSites(spline: TrackSpline, occupied: readonly { x: 
 }
 
 /** Authored Solar-only civic infrastructure, batched by geometry/material per district. */
-export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: ReturnType<typeof createSolarVegetation>, circuitName = 'Kairo Solar') {
+export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: ReturnType<typeof createSolarVegetation>, circuitName = 'Kairo Solar', groundAt: (x: number, z: number, radius: number) => number = () => 0) {
   const group = new THREE.Group(); group.name = 'solar-landmarks'; group.userData.sceneryContainer = true;
   const textures: THREE.Texture[] = [];
   const stone = new THREE.MeshStandardMaterial({ color: 0xded9c5, roughness: .88 });
@@ -74,7 +74,7 @@ export function createSolarLandmarks(sites: SolarLandmarkSite[], vegetation: Ret
   const hemisphere = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   const yAxis = new THREE.Vector3(0, 1, 0);
   for (const site of sites) {
-    const root = new THREE.Group(); root.name = `solar-${site.kind}`; root.position.set(site.x, 0, site.z); root.rotation.y = site.angle;
+    const root = new THREE.Group(); root.name = `solar-${site.kind}`; root.position.set(site.x, groundAt(site.x, site.z, site.r), site.z); root.rotation.y = site.angle;
     root.userData.roadClearanceVerified = true; root.userData.landmark = site; group.add(root);
     const batches = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material; matrices: THREE.Matrix4[] }>();
     const solarPetals: THREE.BufferGeometry[] = [];
