@@ -17,7 +17,7 @@ export function createBrassWorks(m: Materials, kit: SteamKit) {
   const root = new THREE.Group(); root.name = 'steam-brassworks';
   root.userData.roadClearanceVerified = true;
 
-  const { iron, brass, copper, bronze, glass, warmGlass, glow, paving, wood } = kit.mat;
+  const { iron, brass, copper, bronze, glass, warmGlass, glow, paving, wood, windowLit } = kit.mat;
   const { canvasMaterial, goldText, plate } = kit;
   const sketch = kit.sketch('hero');
   const { add, box, cyl, cylLow, sphere, rivet, dome, band, halfTorus, halfDisc, disc, vault, cone, plane,
@@ -183,11 +183,11 @@ export function createBrassWorks(m: Materials, kit: SteamKit) {
   add(box, m.dark, [px, plazaTop + .9 + doorBody / 2 + 1, .3], [doorW + .4, doorBody + 2.2, .2], [0, 0, 0], pf);
   for (const side of [-1, 1]) {
     add(box, bronze, [px + side * doorW / 4, plazaTop + .9 + doorBody / 2, .45], [doorW / 2 - .1, doorBody, .12], [0, 0, 0], pf);
-    for (const y of [1.6, 2.9]) add(box, glow, [px + side * doorW / 4, plazaTop + .9 + y, .52], [doorW / 2 - .6, 1, .04], [0, 0, 0], pf);
+    for (const y of [1.6, 2.9]) add(box, windowLit, [px + side * doorW / 4, plazaTop + .9 + y, .52], [doorW / 2 - .6, 1, .04], [0, 0, 0], pf);
     add(box, iron, [px + side * (doorW / 2 + .35), plazaTop + .9 + doorBody / 2, .6], [.7, doorBody, .7], [0, 0, 0], pf);
     add(rivet, brass, [px + side * .25, plazaTop + 2.6, .55], [.09, .09, .09], [0, 0, 0], pf);
   }
-  add(halfDisc, glow, [px, doorTop, .44], [doorW / 2, doorW / 2, 1], [0, 0, 0], pf);
+  add(halfDisc, windowLit, [px, doorTop, .44], [doorW / 2, doorW / 2, 1], [0, 0, 0], pf);
   for (let k = 1; k < 6; k++) { const a = k / 6 * Math.PI; add(box, iron, [px + Math.cos(a) * doorW / 4, doorTop + Math.sin(a) * doorW / 4, .5], [doorW / 2, .08, .06], [0, 0, 0], pf); }
   add(halfTorus, iron, [px, doorTop, .6], [doorW / 2 + .35, doorW / 2 + .35, 16], [0, 0, 0], pf);
   add(halfTorus, brass, [px, doorTop, .82], [doorW / 2 + .8, doorW / 2 + .8, 4], [0, 0, 0], pf);

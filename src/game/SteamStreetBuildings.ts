@@ -21,7 +21,7 @@ const LOD_DISTANCE = 220, DRAW_DISTANCE = 1000, LOD_MIN_PART = 3.6;
  * the footprint is centred on the origin and stays within w × d.
  */
 export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
-  const { iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood } = kit.mat;
+  const { iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood, windowLit } = kit.mat;
   const clockFace = kit.canvasMaterial(256, 256, c => {
     c.fillStyle = '#e8d6a8'; c.fillRect(0, 0, 256, 256);
     c.strokeStyle = '#3a2c1c'; c.lineWidth = 8; c.beginPath(); c.arc(128, 128, 118, 0, Math.PI * 2); c.stroke();
@@ -46,13 +46,16 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
     }
   };
   const plinth = (s: Sketch, w: number, d: number) => s.add(s.box, paving, [0, .15, 0], [w, .3, d]);
+  /** Panelled bronze double doors with a glazed fanlight, in a moulded arch. */
   const door = (s: Sketch, f: THREE.Matrix4, x: number, width: number, height: number) => {
-    const body = height - width / 2;
-    s.add(s.box, bronze, [x, .3 + body / 2, .08], [width, body, .12], [0, 0, 0], f);
-    s.add(s.halfDisc, glow, [x, .3 + body, .1], [width / 2, width / 2, 1], [0, 0, 0], f);
-    s.add(s.halfTorus, iron, [x, .3 + body, .16], [width / 2 + .25, width / 2 + .25, 10], [0, 0, 0], f);
-    for (const side of [-1, 1]) s.add(s.box, iron, [x + side * (width / 2 + .25), .3 + body / 2, .16], [.4, body, .4], [0, 0, 0], f);
-    s.add(s.box, glow, [x, .3 + body * .62, .16], [width * .6, body * .35, .02], [0, 0, 0], f);
+    const { pane, spring } = s.archFrame(f, x, .3, width, height);
+    s.add(pane, bronze, [x, .3, .03], [width, width, 1], [0, 0, 0], f);
+    s.add(s.halfDisc, kit.mat.windowDark, [x, spring, .05], [width / 2 - .02, width / 2 - .02, 1], [0, 0, 0], f);
+    for (let k = 1; k < 4; k++) { const a = k / 4 * Math.PI; s.add(s.box, iron, [x + Math.cos(a) * width / 4, spring + Math.sin(a) * width / 4, .08], [width / 2, .06, .04], [0, 0, a], f); }
+    s.add(s.box, iron, [x, spring, .08], [width, .12, .06], [0, 0, 0], f);
+    s.add(s.box, iron, [x, .3 + (spring - .3) / 2, .08], [.06, spring - .3, .05], [0, 0, 0], f);
+    for (const side of [-1, 1]) for (const t of [.3, .72]) s.add(s.box, iron, [x + side * width / 4, .3 + (spring - .3) * t, .08], [width / 2 - .3, (spring - .3) * .3, .03], [0, 0, 0], f);
+    for (const side of [-1, 1]) s.add(s.rivet, brass, [x + side * .14, .3 + (spring - .3) * .5, .12], [.07, .07, .07], [0, 0, 0], f);
   };
   const sign = (s: Sketch, f: THREE.Matrix4, board: THREE.Material, x: number, y: number, width: number) => {
     s.add(s.plane, board, [x, y, .2], [width, width / 4, 1], [0, 0, 0], f);
@@ -198,8 +201,8 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
       s.add(s.box, m.brick, [-3, 4.6, -1], [13, 9, 11]);
       pitched(s, -3, 9.1, -1, 5.5, 13, false, m.brick, verdigris);
       const sf = s.front(4.5);
-      s.add(s.box, glass, [-3, 3, .02], [10, 4.2, .04], [0, 0, 0], sf);
-      s.add(s.box, glow, [-3, 2.2, .06], [9.6, 2.6, .02], [0, 0, 0], sf);
+      s.add(s.box, glass, [-3, 4.6, .02], [10, 1, .04], [0, 0, 0], sf);
+      s.add(s.box, windowLit, [-3, 2.4, .06], [9.6, 3.6, .02], [0, 0, 0], sf);
       for (let x = -8; x <= 2; x += 2) s.add(s.box, iron, [x, 3, .15], [.16, 4.4, .16], [0, 0, 0], sf);
       s.add(s.box, copper, [-3, 5.6, .9], [11, .2, 2], [.25, 0, 0], sf);
       sign(s, sf, kit.nameboard('AIRSHIP CHANDLERY', 'ROPES  /  GAS  /  CHARTS'), -3, 7.3, 6.4);
@@ -224,7 +227,7 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
       for (const side of [-1, 1]) s.add(s.box, verdigris, [hx - 7.8, hy + side * 1.8, mz], [2.4, 1.8, .15], [0, 0, side * .5]);
       s.add(s.box, verdigris, [hx - 7.8, hy, mz], [2.4, .15, 3.4]);
       s.add(s.box, bronze, [hx + 1, hy - 3.4, mz], [4.2, 1.1, 1.4]);
-      for (const x of [-.5, 1, 2.5]) s.add(s.box, glow, [hx + x, hy - 3.4, mz + .72], [.8, .5, .04]);
+      for (const x of [-.5, 1, 2.5]) s.add(s.box, windowLit, [hx + x, hy - 3.4, mz + .72], [.8, .5, .04]);
       for (const x of [-1, 3]) s.add(s.cylLow, iron, [hx + x, hy - 2.3, mz], [.03, 1.6, .03]);
       s.crate(-9.6, .3, 7.6, 1.2, .2); s.crate(-8.2, .3, 8.4, 1, -.3);
       s.lamp(1.6, 8.6);
@@ -239,12 +242,12 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
       s.add(s.box, iron, [0, 12.9, -1.5], [20.6, .6, 13.6]);
       // Round rose window over the press hall.
       s.add(s.cyl, iron, [0, 8.4, 5.2], [3.1, .3, 3.1], [Math.PI / 2, 0, 0]);
-      s.add(s.disc, glow, [0, 8.4, 5.38], [2.6, 2.6, 1]);
+      s.add(s.disc, windowLit, [0, 8.4, 5.38], [2.6, 2.6, 1]);
       for (let k = 0; k < 8; k++) s.add(s.box, iron, [Math.cos(k * Math.PI / 8) * 0, 8.4, 5.45], [5.2, .12, .08], [0, 0, k * Math.PI / 8]);
       s.add(s.band, brass, [0, 8.4, 5.46], [2.7, 2.7, 10]); s.add(s.band, brass, [0, 8.4, 5.46], [1.1, 1.1, 8]);
       for (const x of [-6.4, 6.4]) { s.archWindow(pf, x, 6.6, 2.2, 4.8); door(s, pf, x, 3, 4.6); }
       door(s, pf, 0, 2, 3.4);
-      sign(s, pf, kit.nameboard('KAIRO GAZETTE', 'PRINTED BY STEAM'), 0, 4.2, 5.2);
+      sign(s, pf, kit.nameboard('KAIRO GAZETTE', 'PRINTED BY STEAM'), 0, 4.65, 4.8);
       s.staticGear([-8.6, 10.6, 5.25], 1.2, 0);
       // Sawtooth northlights.
       for (const x of [-6.6, 0, 6.6]) {
@@ -282,7 +285,7 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
       for (const [f, c] of [[s.right(9), 2.5], [s.left(-9), -2.5]] as [THREE.Matrix4, number][]) for (const u of [-3.5, 0, 3.5]) { s.archWindow(f, c + u, 3.4, 1.5, 4); s.archWindow(f, c + u, 9.2, 1.5, 3.6); }
       // Dome on a drum.
       s.add(s.cyl, stone, [0, 17.2, -3.5], [4.2, 3.2, 4.2]);
-      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; s.add(s.box, glow, [Math.cos(a) * 4.22, 17.3, -3.5 + Math.sin(a) * 4.22], [.9, 1.8, .06], [0, -a + Math.PI / 2, 0]); }
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; s.add(s.box, windowLit, [Math.cos(a) * 4.22, 17.3, -3.5 + Math.sin(a) * 4.22], [.9, 1.8, .06], [0, -a + Math.PI / 2, 0]); }
       s.add(s.dome, copper, [0, 18.8, -3.5], [4.4, 4.2, 4.4]);
       s.add(s.cyl, verdigris, [0, 23.5, -3.5], [.8, 1.4, .8]); s.add(s.cone, verdigris, [0, 24.9, -3.5], [.95, 1.4, .95]);
       s.add(s.cylLow, brass, [0, 26.6, -3.5], [.06, 2.4, .06]);
@@ -316,7 +319,7 @@ export function createSteamStreetBuildings(m: Materials, kit: SteamKit) {
       s.add(s.cylLow, iron, [lx + 2.1, 3.9, lz], [.32, 1.4, .32]); s.add(s.cone, iron, [lx + 2.1, 4.8, lz], [.55, .6, .55], [Math.PI, 0, 0]);
       s.add(s.dome, brass, [lx, 3.3, lz], [.55, .6, .55]);
       s.add(s.box, bronze, [lx - 3.3, 2.8, lz], [2, 3, 2.3]); s.add(s.box, iron, [lx - 3.3, 4.4, lz], [2.4, .2, 2.6]);
-      s.add(s.box, glow, [lx - 3.3, 3.3, lz + 1.17], [1, .8, .04]);
+      s.add(s.box, windowLit, [lx - 3.3, 3.3, lz + 1.17], [1, .8, .04]);
       s.add(s.box, iron, [lx - .5, 1.1, lz], [7.6, .5, 1.9]);
       for (const side of [-1, 1]) for (const x of [-2.4, -.6, 1.2]) s.add(s.band, iron, [lx + x, 1.1, lz + side * .98], [.75, .75, 8]);
       s.add(s.disc, glow, [lx + 2.62, 2.3, lz], [.3, .3, 1], [0, Math.PI / 2, 0]);

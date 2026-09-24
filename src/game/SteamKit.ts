@@ -27,9 +27,58 @@ export function createSteamKit(m: Materials) {
   const stone = new THREE.MeshStandardMaterial({ name: 'steamkit-dressed-stone', color: 0xc2b294, roughness: .88 });
   const slate = new THREE.MeshStandardMaterial({ name: 'steamkit-slate', color: 0x3f4550, roughness: .8 });
   const wood = new THREE.MeshStandardMaterial({ name: 'steamkit-crate-wood', color: 0x6a4a2e, roughness: .85 });
+  // Window glass, mapped once over each whole arched pane (u across, v up).
+  // Upper glass reflects a pale sky with a diagonal sheen; lower glass shows
+  // the lit room, framed by curtains. The unlit variant is only reflection.
+  const paneTexture = (lit: boolean, emissive: boolean) => {
+    const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 256;
+    const c = canvas.getContext('2d')!;
+    const sky = c.createLinearGradient(0, 0, 0, 256);
+    if (emissive) {
+      sky.addColorStop(0, '#000'); sky.addColorStop(.32, '#1a0e04'); sky.addColorStop(.62, '#b86a24'); sky.addColorStop(1, '#ffb45a');
+    } else if (lit) {
+      sky.addColorStop(0, '#9fb3ba'); sky.addColorStop(.28, '#6f858c'); sky.addColorStop(.5, '#7a6448'); sky.addColorStop(1, '#d9a45e');
+    } else {
+      sky.addColorStop(0, '#a9bcc2'); sky.addColorStop(.35, '#62757c'); sky.addColorStop(1, '#27333a');
+    }
+    c.fillStyle = sky; c.fillRect(0, 0, 64, 256);
+    if (!emissive) {
+      // Diagonal sheen across the glass.
+      const sheen = c.createLinearGradient(0, 40, 64, 150);
+      sheen.addColorStop(0, 'rgba(255,255,255,0)'); sheen.addColorStop(.45, 'rgba(255,255,255,.22)'); sheen.addColorStop(.55, 'rgba(255,255,255,.05)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = sheen; c.fillRect(0, 0, 64, 256);
+    }
+    if (lit) {
+      // A warm lamp deep in the room.
+      const lampGlow = c.createRadialGradient(32, 170, 2, 32, 170, 60);
+      lampGlow.addColorStop(0, emissive ? 'rgba(255,214,150,.9)' : 'rgba(255,220,160,.55)'); lampGlow.addColorStop(1, 'rgba(255,200,120,0)');
+      c.fillStyle = lampGlow; c.fillRect(0, 100, 64, 156);
+      // Curtains tied back at both sides: full at the top, pinched at the tie, flared at the sill.
+      for (const side of [0, 1]) {
+        const edge = side ? 64 : 0, dir = side ? -1 : 1;
+        c.beginPath(); c.moveTo(edge, 70);
+        c.bezierCurveTo(edge + dir * 22, 90, edge + dir * 18, 150, edge + dir * 6, 170);
+        c.bezierCurveTo(edge + dir * 12, 200, edge + dir * 16, 235, edge + dir * 14, 256);
+        c.lineTo(edge, 256); c.closePath();
+        const drape = c.createLinearGradient(edge, 0, edge + dir * 22, 0);
+        drape.addColorStop(0, emissive ? 'rgba(40,14,4,1)' : 'rgba(88,26,20,.95)'); drape.addColorStop(1, emissive ? 'rgba(120,52,14,1)' : 'rgba(150,60,34,.8)');
+        c.fillStyle = drape; c.fill();
+        c.strokeStyle = emissive ? 'rgba(0,0,0,.4)' : 'rgba(40,10,6,.35)'; c.lineWidth = 1;
+        for (const k of [5, 10, 15]) { c.beginPath(); c.moveTo(edge + dir * k, 78); c.quadraticCurveTo(edge + dir * (k * .5 + 3), 150, edge + dir * 4, 168); c.stroke(); }
+        c.fillStyle = emissive ? '#6a4210' : '#c49a52'; c.fillRect(edge + (side ? -9 : 3), 166, 6, 4);
+      }
+      c.fillStyle = emissive ? '#140904' : 'rgba(30,20,12,.6)'; c.fillRect(0, 246, 64, 10);
+    }
+    const map = m.texture(canvas); map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; return map;
+  };
+  const windowLit = new THREE.MeshStandardMaterial({ name: 'steamkit-window-lit', map: paneTexture(true, false), emissiveMap: paneTexture(true, true), emissive: 0xffffff, emissiveIntensity: .75, metalness: .25, roughness: .12 });
+  const windowDark = new THREE.MeshStandardMaterial({ name: 'steamkit-window-dark', map: paneTexture(false, false), metalness: .45, roughness: .1 });
   /** One riveted metal for repeated buildings: each part keeps its alloy's colour per vertex. */
   const metalwork = new THREE.MeshStandardMaterial({ name: 'steamkit-metalwork', color: 0xffffff, vertexColors: true, metalness: .78, roughness: .42 });
-  const materials: THREE.Material[] = [iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood, metalwork];
+  // Window trim on repeated buildings: same look, but too shallow to need shadow-map passes.
+  const metalworkTrim = new THREE.MeshStandardMaterial({ name: 'steamkit-metalwork-trim', color: 0xffffff, vertexColors: true, metalness: .78, roughness: .42 });
+  const stoneTrim = new THREE.MeshStandardMaterial({ name: 'steamkit-stone-trim', color: 0xc2b294, roughness: .88 });
+  const materials: THREE.Material[] = [iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood, metalwork, metalworkTrim, stoneTrim, windowLit, windowDark];
 
   let noise = 7;
   const rnd = () => { noise = (Math.imul(noise, 1103515245) + 12345) >>> 0; return noise / 4294967296; };
@@ -98,8 +147,8 @@ export function createSteamKit(m: Materials) {
   };
   const plateMap = m.texture(plateCanvas), slabMap = m.texture(slabCanvas), ashlarMap = m.texture(ashlarCanvas);
   triplanar(iron, plateMap, 'plate', 2.6, .8); triplanar(copper, plateMap, 'plate', 3.2, .75); triplanar(bronze, plateMap, 'plate', 2.6, .8);
-  triplanar(brass, plateMap, 'plate', 2.2, .45); triplanar(verdigris, plateMap, 'plate', 3, .6); triplanar(metalwork, plateMap, 'plate', 2.6, .65);
-  triplanar(paving, slabMap, 'slab', 4, .9, .1); triplanar(stone, ashlarMap, 'ashlar', 3.2, .7, .2);
+  triplanar(brass, plateMap, 'plate', 2.2, .45); triplanar(verdigris, plateMap, 'plate', 3, .6); triplanar(metalwork, plateMap, 'plate', 2.6, .65); triplanar(metalworkTrim, plateMap, 'plate', 2.6, .65);
+  triplanar(paving, slabMap, 'slab', 4, .9, .1); triplanar(stone, ashlarMap, 'ashlar', 3.2, .7, .2); triplanar(stoneTrim, ashlarMap, 'ashlar', 3.2, .7, .2);
 
   // ------------------------------------------------------------ Signs
   const canvasMaterial = (width: number, height: number, draw: (c: CanvasRenderingContext2D) => void, transparent = false) => {
@@ -168,35 +217,105 @@ export function createSteamKit(m: Materials) {
 
   const face = (yaw: number, x: number, z: number) => new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
 
+  /**
+   * Arched window pieces for a unit-wide opening of the given height/width
+   * ratio (the head is a semicircle of radius 0.5): the glass with UVs over
+   * the whole pane, a solid extruded frame, and a moulded hood over the head.
+   */
+  const archCache = new Map<string, { pane: THREE.BufferGeometry; frame: THREE.BufferGeometry; hood: THREE.BufferGeometry; reveal: THREE.BufferGeometry }>();
+  const archPieces = (aspect: number, hero: boolean) => {
+    const key = `${aspect.toFixed(2)}-${hero}`;
+    let cached = archCache.get(key);
+    if (cached) return cached;
+    const seg = hero ? 18 : 8, spring = aspect - .5;
+    const arched = (r: number, bottom = 0) => {
+      const shape = new THREE.Shape(); shape.moveTo(-r, bottom); shape.lineTo(r, bottom); shape.lineTo(r, spring);
+      shape.absarc(0, spring, r, 0, Math.PI, false); shape.lineTo(-r, bottom); return shape;
+    };
+    const pane = new THREE.ShapeGeometry(arched(.5), seg);
+    const uv = pane.attributes.uv as THREE.BufferAttribute, pos = pane.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) + .5, pos.getY(i) / aspect);
+    const frameShape = arched(.62, -.02); frameShape.holes.push(arched(.5) as unknown as THREE.Path);
+    const frame = new THREE.ExtrudeGeometry(frameShape, { depth: .16, bevelEnabled: false, curveSegments: seg });
+    const revealShape = arched(.5); revealShape.holes.push(arched(.44, .06) as unknown as THREE.Path);
+    const reveal = new THREE.ShapeGeometry(revealShape, seg);
+    const hoodShape = new THREE.Shape(); hoodShape.absarc(0, spring, .8, 0, Math.PI, false); hoodShape.lineTo(-.66, spring);
+    hoodShape.absarc(0, spring, .66, Math.PI, 0, true); hoodShape.lineTo(.8, spring);
+    const hood = new THREE.ExtrudeGeometry(hoodShape, { depth: .14, bevelEnabled: false, curveSegments: seg });
+    // Frames and hoods sit against the wall: drop their back caps.
+    const front = (geo: THREE.BufferGeometry) => {
+      const flat = geo.toNonIndexed(), n = flat.attributes.normal, keep: number[] = [];
+      for (let t = 0; t < n.count; t += 3) if (n.getZ(t) > -.5) keep.push(t);
+      const out = new THREE.BufferGeometry();
+      for (const name of ['position', 'normal', 'uv']) {
+        const src = flat.attributes[name] as THREE.BufferAttribute, size = src.itemSize, data = new Float32Array(keep.length * 3 * size);
+        keep.forEach((t, i) => data.set((src.array as Float32Array).subarray(t * size, (t + 3) * size), i * 3 * size));
+        out.setAttribute(name, new THREE.BufferAttribute(data, size));
+      }
+      flat.dispose(); geo.dispose(); return out;
+    };
+    cached = { pane, frame: front(frame), hood: front(hood), reveal }; archCache.set(key, cached); return cached;
+  };
+  let windowSeed = 11;
+
   /** Collects parts for one building, in its local metres. */
   const sketch = (detail: 'hero' | 'lean' = 'hero') => {
     const g = detail === 'hero' ? heroGeo : leanGeo, hero = detail === 'hero';
-    const { box, cylLow, rivet, band, halfTorus, halfDisc, cone } = g;
+    const { box, cylLow, rivet, band, cone } = g;
     const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
-    const extents = new Map<THREE.BufferGeometry, number>();
+    const extents = new Map<THREE.BufferGeometry, number>(), trim = new Set<THREE.BufferGeometry>();
     const box3 = new THREE.Box3(), size = new THREE.Vector3();
+    /** While set, parts are close-up detail only and never reach the distant LOD. */
+    let closeUp = false;
     const tmp = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, p: V3, s: V3 = [1, 1, 1], r: V3 = [0, 0, 0], base?: THREE.Matrix4) => {
       const part = geo.index ? geo.toNonIndexed() : geo.clone();
       tmp.compose(new THREE.Vector3(...p), q.setFromEuler(e.set(r[0], r[1], r[2])), new THREE.Vector3(...s));
       if (base) tmp.premultiply(base);
       part.applyMatrix4(tmp);
-      extents.set(part, box3.setFromBufferAttribute(part.attributes.position as THREE.BufferAttribute).getSize(size).length());
+      extents.set(part, closeUp ? 0 : box3.setFromBufferAttribute(part.attributes.position as THREE.BufferAttribute).getSize(size).length());
+      if (closeUp) trim.add(part);
       if (!parts.has(mat)) parts.set(mat, []);
       parts.get(mat)!.push(part);
     };
     const front = (z: number) => face(0, 0, z), right = (x: number) => face(Math.PI / 2, x, 0);
     const left = (x: number) => face(-Math.PI / 2, x, 0), back = (z: number) => face(Math.PI, 0, z);
-    /** A round-headed window, lit from within, drawn on a wall facing the frame's +z. */
-    const archWindow = (f: THREE.Matrix4, x: number, y: number, w: number, h: number, lit = true) => {
-      const body = h - w / 2, top = y + body, pane = lit ? glow : glass;
-      add(box, pane, [x, y + body / 2, .03], [w, body, .06], [0, 0, 0], f);
-      add(halfDisc, pane, [x, top, .065], [w / 2, w / 2, 1], [0, 0, 0], f);
-      add(halfTorus, iron, [x, top, .1], [w / 2 + .08, w / 2 + .08, 5], [0, 0, 0], f);
-      for (const side of [-1, 1]) add(box, iron, [x + side * (w / 2 + .08), y + body / 2, .1], [.2, body, .22], [0, 0, 0], f);
-      add(box, brass, [x, y - .08, .2], [w + .5, .18, .42], [0, 0, 0], f);
-      add(box, iron, [x, y + body / 2 + .1, .1], [.07, body + w / 2 - .2, .1], [0, 0, 0], f);
-      for (const t of hero ? [.36, .7] : [.5]) add(box, iron, [x, y + body * t, .1], [w, .07, .1], [0, 0, 0], f);
+    /**
+     * A round-headed sash window on a wall facing the frame's +z: glass (lit
+     * or dark), a solid arched frame with a shadowed reveal, glazing bars that
+     * follow the head, a moulded hood with keystone and a stone sill.
+     */
+    const archWindow = (f: THREE.Matrix4, x: number, y: number, w: number, h: number, lit?: boolean) => {
+      const aspect = Math.round(Math.max(1.1, h / w) * 20) / 20, height = aspect * w, body = height - w / 2, spring = y + body;
+      const { pane, frame, hood, reveal } = archPieces(aspect, hero);
+      windowSeed = (Math.imul(windowSeed, 1103515245) + 12345) >>> 0;
+      const on = lit ?? (windowSeed >>> 16) % 10 < 7;
+      add(pane, on ? windowLit : windowDark, [x, y, .04], [w, w, 1], [0, 0, 0], f);
+      closeUp = true;
+      add(reveal, m.dark, [x, y, .05], [w, w, 1], [0, 0, 0], f);
+      add(frame, iron, [x, y, .02], [w, w, 1], [0, 0, 0], f);
+      add(hood, stone, [x, y, .04], [w, w, 1], [0, 0, 0], f);
+      add(box, stone, [x, spring + w * .5 + w * .06, .12], [w * .18, w * .26, .24], [0, 0, 0], f);
+      add(box, stone, [x, y - .1, .16], [w + .5, .2, .38], [0, 0, 0], f);
+      // Glazing bars: mullion to the crown, transom at the springing, fan in the head.
+      const bar = Math.max(.05, w * .035);
+      add(box, iron, [x, y + height / 2, .09], [bar, height - .05, .06], [0, 0, 0], f);
+      add(box, iron, [x, spring, .09], [w, bar * 1.3, .06], [0, 0, 0], f);
+      if (body > w * 1.1) add(box, iron, [x, y + body * .5, .09], [w, bar, .06], [0, 0, 0], f);
+      for (const a of hero ? [Math.PI / 6, Math.PI / 3, 2 * Math.PI / 3, 5 * Math.PI / 6] : [Math.PI / 4, 3 * Math.PI / 4])
+        add(box, iron, [x + Math.cos(a) * w / 4, spring + Math.sin(a) * w / 4, .09], [w / 2, bar, .06], [0, 0, a], f);
+      closeUp = false;
+    };
+    /** The same moulded arched frame, hood and keystone around an opening (doors). */
+    const archFrame = (f: THREE.Matrix4, x: number, y: number, w: number, h: number) => {
+      const aspect = Math.round(Math.max(1.1, h / w) * 20) / 20, spring = y + aspect * w - w / 2;
+      const { frame, hood } = archPieces(aspect, hero);
+      closeUp = true;
+      add(frame, iron, [x, y, .02], [w, w, 1.4], [0, 0, 0], f);
+      add(hood, stone, [x, y, .04], [w, w, 1.3], [0, 0, 0], f);
+      add(box, stone, [x, spring + w * .56, .14], [w * .16, w * .24, .28], [0, 0, 0], f);
+      closeUp = false;
+      return { pane: archPieces(aspect, hero).pane, spring };
     };
     const pilaster = (f: THREE.Matrix4, x: number, y0: number, y1: number, width = .8) => {
       add(box, iron, [x, (y0 + y1) / 2, .22], [width, y1 - y0, .44], [0, 0, 0], f);
@@ -262,9 +381,10 @@ export function createSteamKit(m: Materials) {
     const merge = (consolidate = false, minExtent = 0) => {
       const merged = new Map<THREE.Material, THREE.BufferGeometry>();
       const metals = new Set<THREE.Material>([iron, brass, copper, verdigris, bronze, m.dark, warmGlass]);
-      const folded: THREE.BufferGeometry[] = [];
+      const folded: THREE.BufferGeometry[] = [], foldedTrim: THREE.BufferGeometry[] = [], stoneTrimParts: THREE.BufferGeometry[] = [];
       for (const [mat, all] of parts) {
-        const list = all.filter(part => extents.get(part)! >= minExtent);
+        let list = all.filter(part => extents.get(part)! >= minExtent);
+        if (consolidate && mat === stone) { stoneTrimParts.push(...list.filter(part => trim.has(part))); list = list.filter(part => !trim.has(part)); }
         if (!list.length) continue;
         if (consolidate && metals.has(mat)) {
           const colour = mat === warmGlass ? warmGlass.emissive : (mat as THREE.MeshStandardMaterial).color;
@@ -274,33 +394,37 @@ export function createSteamKit(m: Materials) {
               for (let i = 0; i < count; i++) data.set([colour.r, colour.g, colour.b], i * 3);
               part.setAttribute('color', new THREE.BufferAttribute(data, 3));
             }
-            folded.push(part);
+            (trim.has(part) ? foldedTrim : folded).push(part);
           }
           continue;
         }
         merged.set(mat, mergeGeometries(list)!);
       }
       if (folded.length) merged.set(metalwork, mergeGeometries(folded)!);
+      if (foldedTrim.length) merged.set(metalworkTrim, mergeGeometries(foldedTrim)!);
+      if (stoneTrimParts.length) merged.set(stoneTrim, mergeGeometries(stoneTrimParts)!);
       return merged;
     };
-    const dispose = () => { for (const list of parts.values()) list.forEach(part => part.dispose()); parts.clear(); extents.clear(); };
-    return { ...g, add, face, front, right, left, back, archWindow, pilaster, railing, tube, bands, lamp, crate, staticGear, merge, dispose };
+    const dispose = () => { for (const list of parts.values()) list.forEach(part => part.dispose()); parts.clear(); extents.clear(); trim.clear(); };
+    return { ...g, add, face, front, right, left, back, archWindow, archFrame, pilaster, railing, tube, bands, lamp, crate, staticGear, merge, dispose };
   };
 
-  const glowing = new Set<THREE.Material>([glow, glass, warmGlass, paving]);
+  const glowing = new Set<THREE.Material>([glow, glass, warmGlass, paving, windowLit, windowDark, metalworkTrim, stoneTrim]);
   return {
-    mat: { iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood, metalwork },
+    mat: { iron, brass, copper, verdigris, bronze, glass, warmGlass, glow, paving, stone, slate, wood, metalwork, windowLit, windowDark },
     sketch, canvasMaterial, goldText, plate, nameboard, heroGear, leanGear,
     /** Materials that should not cast shadows (glazing, lamplight, signs). */
     castsShadow: (mat: THREE.Material) => !glowing.has(mat) && (mat as THREE.MeshStandardMaterial).name !== 'steamkit-sign',
     setCinematic(enabled: boolean) {
       glow.emissiveIntensity = enabled ? 1.7 : .9;
+      windowLit.emissiveIntensity = enabled ? 1.5 : .75;
       warmGlass.emissiveIntensity = enabled ? .4 : .18;
     },
     dispose() {
       materials.forEach(mat => mat.dispose());
       for (const set of [heroGeo, leanGeo]) Object.values(set).forEach(geo => geo.dispose());
       heroGear.dispose(); leanGear.dispose();
+      for (const pieces of archCache.values()) Object.values(pieces).forEach(geo => geo.dispose());
     },
   };
 }
