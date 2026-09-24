@@ -388,8 +388,8 @@ export function createSolarArchitecture(parent: THREE.Group, vegetation: Vegetat
   const grounded = <A extends unknown[], R>(form: (x: number, z: number, ...rest: A) => R, radius: (...rest: A) => number) =>
     (x: number, z: number, ...rest: A): R => { base = groundAt(x, z, radius(...rest)); try { return form(x, z, ...rest); } finally { base = 0; } };
   return {
-    helixTower: grounded(helixTower, w => w * .8), terraceHill: grounded(terraceHill, (w, depth) => Math.max(w, depth) * .6),
-    sailTower: grounded(sailTower, w => w * .6), domeCluster: grounded(domeCluster, radius => radius), arborSpire: grounded(arborSpire, (scale = 1) => 22 * scale),
+    helixTower: grounded(helixTower, w => w * .5 + 2), terraceHill: grounded(terraceHill, (w, depth) => Math.max(w, depth) * .5 + 1),
+    sailTower: grounded(sailTower, w => w * .7 + 1), domeCluster: grounded(domeCluster, radius => radius * 1.15), arborSpire: grounded(arborSpire, (scale = 1) => 22 * scale),
     finish, update, dispose,
   };
 }

@@ -21,7 +21,8 @@ export class CameraRig {
   private readonly obstructionOrigin = new THREE.Vector3();
   private readonly obstructionDirection = new THREE.Vector3();
 
-  constructor(private readonly camera: THREE.PerspectiveCamera, private readonly obstructions: THREE.Object3D[] = []) {}
+  /** `groundAt`: terrain height for hilly layouts, so the follow camera never sinks into a slope. */
+  constructor(private readonly camera: THREE.PerspectiveCamera, private readonly obstructions: THREE.Object3D[] = [], private readonly groundAt?: (x: number, z: number) => number) {}
 
   private keepOutsideScenery(car: Car): void {
     if (!this.obstructions.length || this.mode === 'hood' || this.mode === 'cockpit') return;
@@ -60,6 +61,7 @@ export class CameraRig {
     this.camera.up.set(0, 1, 0);
     if (this.mode === 'hood' || this.mode === 'cockpit') this.camera.up.applyQuaternion(car.group.quaternion);
     this.keepOutsideScenery(car);
+    if (this.groundAt && this.mode !== 'hood' && this.mode !== 'cockpit') this.camera.position.y = Math.max(this.camera.position.y, this.groundAt(this.camera.position.x, this.camera.position.z) + 1.2);
     this.camera.lookAt(this.lookAt);
     this.fov = this.targetFov(car.physics.telemetry.speed);
     this.camera.fov = this.fov;
@@ -116,6 +118,7 @@ export class CameraRig {
     }
 
     this.keepOutsideScenery(car);
+    if (this.groundAt && !onboard) this.camera.position.y = Math.max(this.camera.position.y, this.groundAt(this.camera.position.x, this.camera.position.z) + 1.2);
     this.camera.lookAt(this.smoothedLook);
 
     const targetFov = this.targetFov(speed);

@@ -249,7 +249,7 @@ export class Game {
             if (object.name === 'neon-tunnel-shell' || object.name === 'kairo-flyover-deck')
                 cameraObstructions.push(object);
         });
-        this.cameraRig = new CameraRig(this.camera, cameraObstructions);
+        this.cameraRig = new CameraRig(this.camera, cameraObstructions, this.spline.circuit.terrainFollow ? (x, z) => this.builder.terrainHeightAt(x, z) : undefined);
         this.hud = new Hud(this.spline);
         this.timing = new Timing(this.spline);
         this.resetCar();

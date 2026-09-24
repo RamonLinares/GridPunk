@@ -30,21 +30,21 @@ export function createNeonStreetLife(builder:TrackBuilder,random:()=>number):THR
   part(box,glow,at(-side*.13,.75),.07,.12,.38,0,angle);
  }
  group.userData.lampPositions=lampPositions;
- for(let i=9;i<builder.spline.count;i+=17){if(neonBankAt(i/builder.spline.count)>.005 || neonTunnelAt(i/builder.spline.count))continue;const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*15.7);if(builder.distanceToTrack(base.x,base.z)<14.4)continue;
+ for(let i=9;i<builder.spline.count;i+=17){if(neonBankAt(i/builder.spline.count)>.005 || neonTunnelAt(i/builder.spline.count))continue;const s=builder.spline.sampleAt(i),side=i%2?1:-1,base=s.position.clone().addScaledVector(s.right,side*15.7);if(builder.spline.circuit.terrainFollow)base.y=builder.groundAt(base.x,base.z);if(builder.distanceToTrack(base.x,base.z)<14.4)continue;
   const angle=Math.atan2(s.tangent.x,s.tangent.z);
   for(let j=0;j<2+Math.floor(random()*3);j++){
-   const p=base.clone().addScaledVector(s.tangent,(j-1)*1.2),m=materials[Math.floor(random()*4)];
+   const p=base.clone().addScaledVector(s.tangent,(j-1)*1.2),m=materials[Math.floor(random()*4)];if(builder.spline.circuit.terrainFollow)p.y=builder.groundAt(p.x,p.z);
    part(coat,m,p.clone().add(new THREE.Vector3(0,.93,0)),1,1,1,0,angle);
    part(head,materials[4],p.clone().add(new THREE.Vector3(0,1.57,0)),1,1,1);
    for(const side of[-1,1]){part(box,materials[0],p.clone().add(new THREE.Vector3(side*.1,.28,0)),.13,.55,.16);part(box,m,p.clone().add(new THREE.Vector3(side*.27,1.1,0)),.13,.58,.15,0,0,side*.1);}
    if(random()>.28){part(umbrella,m,p.clone().add(new THREE.Vector3(0,1.85,0)),.72,.38,.72);part(box,materials[0],p.clone().add(new THREE.Vector3(0,1.52,0)),.025,.7,.025);}
   }
-  const p=base.clone().addScaledVector(s.tangent,4);
+  const p=base.clone().addScaledVector(s.tangent,4);if(builder.spline.circuit.terrainFollow)p.y=builder.groundAt(p.x,p.z,.8);
   // Utility box, bins and a bench remain outside the wall.
   part(box,materials[2],p.clone().add(new THREE.Vector3(0,.6,0)),.8,1.2,.5,0,angle);
   part(box,materials[0],p.clone().add(new THREE.Vector3(1,.4,0)),.5,.8,.5);
   if(i%3===0)for(let j=0;j<3;j++){
-   const b=p.clone().addScaledVector(s.tangent,3+j*1.4);
+   const b=p.clone().addScaledVector(s.tangent,3+j*1.4);if(builder.spline.circuit.terrainFollow)b.y=builder.groundAt(b.x,b.z,.8)+.3;
    const at=(x:number,y:number,z:number)=>b.clone().addScaledVector(s.right,x).addScaledVector(s.tangent,z).add(new THREE.Vector3(0,y,0));
    part(wheel,materials[0],at(0,.24,-.57),1,1,1,0,0,Math.PI/2);part(wheel,materials[0],at(0,.24,.57),1,1,1,0,0,Math.PI/2);
    part(box,materials[3],at(0,.52,0),.4,.22,1.1,0,angle);part(box,materials[0],at(0,.76,-.2),.45,.14,.6,0,angle);

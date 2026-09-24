@@ -51,6 +51,8 @@ export class TrackBuilder {
     readonly boundaryCurve: THREE.CatmullRomCurve3;
     /** Terrain surface height at a world XZ position (matches the built mesh). */
     terrainHeightAt: (x: number, z: number) => number = () => 0;
+    /** Exact lowest terrain within a square (min over the height-field vertices it spans). */
+    private terrainMinIn: (x: number, z: number, half: number) => number = (x, z) => this.terrainHeightAt(x, z);
     /**
      * Ground under a footprint for scenery: the lowest terrain point across it,
      * so buildings cut into slopes instead of floating. Flat cities return 0.
@@ -58,11 +60,10 @@ export class TrackBuilder {
     groundAt(x: number, z: number, radius = 0): number {
         if (!this.spline.circuit.terrainFollow)
             return 0;
-        let lowest = this.terrainHeightAt(x, z);
-        if (radius > 0)
-            for (let k = 0; k < 8; k++)
-                lowest = Math.min(lowest, this.terrainHeightAt(x + Math.cos(k * Math.PI / 4) * radius * .8, z + Math.sin(k * Math.PI / 4) * radius * .8));
-        return lowest;
+        // The square containing the footprint at any yaw; the terrain is
+        // piecewise linear, so its minimum is at a vertex inside the square
+        // (or on the square's edge, covered by the one-cell border).
+        return radius > 0 ? this.terrainMinIn(x, z, radius) - .3 : this.terrainHeightAt(x, z);
     }
     private readonly n: number;
     /** Emissive overlay for the five-lamp start bank; its matrices encode current lamps. */
@@ -79,6 +80,8 @@ export class TrackBuilder {
             this.drivingSurface.add(mesh);
         this.drivingSurface.add(this.group.getObjectByName('terrain') as THREE.Mesh);
         this.buildBarriers();
+        if (this.spline.circuit.terrainFollow)
+            this.buildRetainingWalls();
         this.buildStartFinish();
         this.buildGrid();
         this.buildSectorLines();
@@ -227,7 +230,9 @@ export class TrackBuilder {
         for (let i = 0; i < this.n; i += 1) {
             const s = this.spline.samples[i];
             const base = s.position.clone().addScaledVector(s.right, offset[i]);
-            positions.push(base.x, base.y + y0, base.z, base.x, base.y + y1, base.z);
+            // On hilly layouts the wall becomes a retaining wall down to the ground.
+            const bottom = this.spline.circuit.terrainFollow ? Math.min(base.y + y0, this.terrainHeightAt(base.x, base.z) - .4) : base.y + y0;
+            positions.push(base.x, bottom, base.z, base.x, base.y + y1, base.z);
             normals.push(s.right.x, 0, s.right.z, s.right.x, 0, s.right.z);
             const v = distance / metrePerTile;
             uvs.push(v, 0, v, 1);
@@ -713,22 +718,29 @@ export class TrackBuilder {
      * eases to a level plain at the edge of the grid.
      */
     private buildHillTerrain(): void {
-        const samples = this.spline.samples, cell = 16, margin = 1100, hug = 26, blend = 90;
+        const samples = this.spline.samples, cell = 12, margin = 1000, hug = 32, blend = 120;
         const box = new THREE.Box3().setFromPoints(samples.map(s => s.position));
         const x0 = Math.floor((box.min.x - margin) / cell) * cell, z0 = Math.floor((box.min.z - margin) / cell) * cell;
         const nx = Math.ceil((box.max.x + margin - x0) / cell), nz = Math.ceil((box.max.z + margin - z0) / cell);
         // Road samples (8 m apart) hashed for nearest-road lookup, each with the
         // lowest height across its banked width.
         const road: { x: number; z: number; low: number }[] = [], hashSize = 48, hash = new Map<string, number[]>();
-        for (let i = 0; i < samples.length; i += 2) {
+        for (let i = 0; i < samples.length; i += 1) {
             const s = samples[i], low = s.position.y - Math.abs(s.right.y) * 14 - .35;
             const key = `${Math.floor(s.position.x / hashSize)},${Math.floor(s.position.z / hashSize)}`;
             if (!hash.has(key)) hash.set(key, []);
             hash.get(key)!.push(road.length);
             road.push({ x: s.position.x, z: s.position.z, low });
         }
-        const coarse = road.filter((_, i) => i % 5 === 0);
+        const coarse = road.filter((_, i) => i % 10 === 0);
         const mean = coarse.reduce((sum, p) => sum + p.low, 0) / coarse.length;
+        // Local field: road samples every 16 m in a coarser hash. A Gaussian
+        // blend (σ 55 m) makes the ground take after the nearest roads, and
+        // slope cones (1 in 4 from every road) stop it rising into cliffs next
+        // to a lower road that a higher section passes nearby.
+        const local: typeof road = road.filter((_, i) => i % 4 === 0), fieldHash = new Map<string, number[]>(), fieldCell = 64;
+        local.forEach((p, k) => { const key = `${Math.floor(p.x / fieldCell)},${Math.floor(p.z / fieldCell)}`; if (!fieldHash.has(key)) fieldHash.set(key, []); fieldHash.get(key)!.push(k); });
+        const sigma = 55, slope = .25, reachField = 260, far = Math.exp(-(150 * 150) / (2 * sigma * sigma));
         const heights = new Float32Array((nx + 1) * (nz + 1));
         for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
             const x = x0 + i * cell, z = z0 + j * cell;
@@ -740,15 +752,43 @@ export class TrackBuilder {
                     if (d < nearest) { nearest = d; nearLow = road[k].low; }
                 }
             }
-            let weight = 0, field = 0;
+            // Broad fallback far from any road: inverse-distance over the lap.
+            let weight = 0, broad = 0;
             for (const p of coarse) {
                 const w = 1 / (((p.x - x) ** 2 + (p.z - z) ** 2 + 6400) ** 1.5);
-                weight += w; field += w * p.low;
+                weight += w; broad += w * p.low;
             }
-            field /= weight;
+            broad /= weight;
+            let gauss = 0, gaussH = 0, lower = -Infinity, upper = Infinity;
+            const fx = Math.floor(x / fieldCell), fz = Math.floor(z / fieldCell), fr = Math.ceil(reachField / fieldCell);
+            for (let a = -fr; a <= fr; a++) for (let b = -fr; b <= fr; b++) {
+                for (const k of fieldHash.get(`${fx + a},${fz + b}`) ?? []) {
+                    const p = local[k], d = Math.hypot(p.x - x, p.z - z);
+                    if (d > reachField) continue;
+                    const w = Math.exp(-(d * d) / (2 * sigma * sigma));
+                    gauss += w; gaussH += w * p.low;
+                    lower = Math.max(lower, p.low - slope * d); upper = Math.min(upper, p.low + slope * d);
+                }
+            }
+            let field = (gaussH + far * broad) / (gauss + far);
+            if (lower <= upper) field = THREE.MathUtils.clamp(field, lower, upper);
+            else if (Number.isFinite(lower)) field = (lower + upper) / 2;
             const edge = Math.min(i, j, nx - i, nz - j) * cell;
             field = THREE.MathUtils.lerp(mean, field, THREE.MathUtils.smoothstep(edge, 0, 320));
             heights[j * (nx + 1) + i] = nearest === Infinity ? field : THREE.MathUtils.lerp(nearLow, field, THREE.MathUtils.smoothstep(nearest, hug, blend));
+        }
+        // Carve: every grid corner of a cell the road or its verge touches sits
+        // below the lowest road point in that cell, so the ground can never rise
+        // through the surface (steep slopes, banking, sections passing close).
+        const vertex = (i: number, j: number) => j * (nx + 1) + i;
+        for (const s of samples) for (let offset = -16; offset <= 16; offset += 2) {
+            const x = s.position.x + s.right.x * offset, z = s.position.z + s.right.z * offset, limit = s.position.y + s.right.y * offset - .35;
+            const i = Math.floor((x - x0) / cell), j = Math.floor((z - z0) / cell);
+            for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+                const ii = i + a, jj = j + b;
+                if (ii < 0 || jj < 0 || ii > nx || jj > nz) continue;
+                heights[vertex(ii, jj)] = Math.min(heights[vertex(ii, jj)], limit);
+            }
         }
         const positions = new Float32Array((nx + 1) * (nz + 1) * 3), uvs = new Float32Array((nx + 1) * (nz + 1) * 2), index: number[] = [];
         for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
@@ -762,17 +802,49 @@ export class TrackBuilder {
         geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         geometry.setIndex(index);
         geometry.computeVertexNormals();
-        const terrain = new THREE.Mesh(geometry, this.materials.runoffAsphalt);
+        // Steep faces read as rock cuttings; level ground keeps the city floor.
+        const terrainMaterial = this.materials.runoffAsphalt.clone();
+        terrainMaterial.name = 'hill-terrain';
+        terrainMaterial.onBeforeCompile = shader => {
+            shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying float vSteep; varying vec3 vRockPos;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSteep = 1. - normal.y; vRockPos = position;');
+            shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSteep; varying vec3 vRockPos;')
+                .replace('#include <map_fragment>', `#include <map_fragment>
+                    // Coursed masonry on steep faces: 0.9 m courses, staggered joints.
+                    float course = floor(vRockPos.y / .9);
+                    float along = (vRockPos.x + vRockPos.z) / 1.8 + course * .5;
+                    float joint = max(step(fract(vRockPos.y / .9), .07), step(fract(along), .05));
+                    float tone = fract(sin(course * 12.9898 + floor(along) * 78.233) * 43758.5453);
+                    vec3 stone = mix(vec3(.30, .27, .23), vec3(.42, .38, .32), tone);
+                    vec3 wall = mix(stone, vec3(.16, .14, .12), joint);
+                    diffuseColor.rgb = mix(diffuseColor.rgb, wall, smoothstep(.15, .35, vSteep));`);
+        };
+        terrainMaterial.customProgramCacheKey = () => 'hill-terrain';
+        const terrain = new THREE.Mesh(geometry, terrainMaterial);
         terrain.name = 'terrain';
         terrain.receiveShadow = true;
         this.group.add(terrain);
-        // Level plain beyond the grid, at the grid's settled edge height.
-        const plain = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), this.materials.runoffAsphalt);
-        plain.rotation.x = -Math.PI / 2;
-        plain.position.set(x0 + nx * cell / 2, mean - .2, z0 + nz * cell / 2);
+        // Level plain beyond the grid, at the grid's settled edge height. It is
+        // a frame around the height field, never a sheet through it.
+        const outline = new THREE.Shape(), gx1 = x0 + nx * cell, gz1 = z0 + nz * cell, ext = 4500;
+        // Shape space is (x, -z) so rotating -90° about X lays it face-up.
+        outline.moveTo(x0 - ext, -(z0 - ext)); outline.lineTo(gx1 + ext, -(z0 - ext)); outline.lineTo(gx1 + ext, -(gz1 + ext)); outline.lineTo(x0 - ext, -(gz1 + ext));
+        const hole = new THREE.Path(); hole.moveTo(x0 + 1, -(z0 + 1)); hole.lineTo(x0 + 1, -(gz1 - 1)); hole.lineTo(gx1 - 1, -(gz1 - 1)); hole.lineTo(gx1 - 1, -(z0 + 1));
+        outline.holes.push(hole);
+        const plainGeometry = new THREE.ShapeGeometry(outline);
+        plainGeometry.rotateX(-Math.PI / 2);
+        const plain = new THREE.Mesh(plainGeometry, terrainMaterial);
+        plain.position.y = mean - .2;
         plain.name = 'terrain-plain';
         plain.receiveShadow = true;
         this.group.add(plain);
+        this.terrainMinIn = (x: number, z: number, half: number) => {
+            const i0 = THREE.MathUtils.clamp(Math.floor((x - half - x0) / cell), 0, nx), i1 = THREE.MathUtils.clamp(Math.ceil((x + half - x0) / cell), 0, nx);
+            const j0 = THREE.MathUtils.clamp(Math.floor((z - half - z0) / cell), 0, nz), j1 = THREE.MathUtils.clamp(Math.ceil((z + half - z0) / cell), 0, nz);
+            let lowest = Infinity;
+            for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) lowest = Math.min(lowest, heights[j * (nx + 1) + i]);
+            return lowest;
+        };
         this.terrainHeightAt = (x: number, z: number) => {
             const fx = THREE.MathUtils.clamp((x - x0) / cell, 0, nx - 1e-6), fz = THREE.MathUtils.clamp((z - z0) / cell, 0, nz - 1e-6);
             const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, w = fz - j, at = (a: number, b: number) => heights[b * (nx + 1) + a];
@@ -781,6 +853,67 @@ export class TrackBuilder {
                 ? at(i, j) + (at(i + 1, j) - at(i, j)) * u + (at(i, j + 1) - at(i, j)) * w
                 : at(i + 1, j + 1) + (at(i, j + 1) - at(i + 1, j + 1)) * (1 - u) + (at(i + 1, j) - at(i + 1, j + 1)) * (1 - w);
         };
+    }
+    /**
+     * Where the ground behind a barrier climbs steeply (a higher section of the
+     * lap passes close by), the barrier continues up as a capped retaining wall
+     * to the top of the rise, so the slope reads as a built wall, not a cliff.
+     */
+    private buildRetainingWalls(): void {
+        const reach = [2, 4, 6, 8, 11, 14, 17, 20];
+        for (const [side, offsets] of [[-1, this.offL], [1, this.offR]] as const) {
+            const raw: number[] = [];
+            for (let i = 0; i < this.n; i++) {
+                const s = this.spline.samples[i], base = s.position.y + s.right.y * offsets[i] + 1.05;
+                const at = (d: number) => {
+                    const p = s.position.clone().addScaledVector(s.right, offsets[i] + side * (.42 + d));
+                    return this.terrainHeightAt(p.x, p.z);
+                };
+                const heights = reach.map(at);
+                const steep = heights.some((h, k) => h - base > .6 * reach[k] + 2);
+                raw.push(steep ? Math.max(base, ...heights) + .3 : base);
+            }
+            // Running max then a short average: level coursed tops, no teeth.
+            const top = raw.map((_, i) => { let m = -Infinity; for (let k = -4; k <= 4; k++) m = Math.max(m, raw[(i + k + this.n) % this.n]); return m; });
+            const smooth = top.map((_, i) => { let sum = 0; for (let k = -3; k <= 3; k++) sum += top[(i + k + this.n) % this.n]; return sum / 7; });
+            const positions: number[] = [], normals: number[] = [], uvs: number[] = [], index: number[] = [];
+            const capPositions: number[] = [], capIndex: number[] = [];
+            let distance = 0;
+            for (let i = 0; i < this.n; i++) {
+                const s = this.spline.samples[i], rear = offsets[i] + side * .42;
+                const p = s.position.clone().addScaledVector(s.right, rear), base = s.position.y + s.right.y * offsets[i] + 1.0;
+                const h = Math.max(base, smooth[i]);
+                positions.push(p.x, base, p.z, p.x, h, p.z);
+                normals.push(-s.right.x * side, 0, -s.right.z * side, -s.right.x * side, 0, -s.right.z * side);
+                uvs.push(distance / 4, 0, distance / 4, (h - base) / 4);
+                const outer = s.position.clone().addScaledVector(s.right, rear + side * .7);
+                capPositions.push(p.x, h + .12, p.z, outer.x, h + .12, outer.z);
+                distance += s.position.distanceTo(this.spline.sampleAt(i + 1).position);
+            }
+            for (let i = 0; i < this.n; i++) {
+                const cur = i * 2, next = ((i + 1) % this.n) * 2;
+                if (smooth[i] <= this.spline.samples[i].position.y + 1.3 && smooth[(i + 1) % this.n] <= this.spline.samples[(i + 1) % this.n].position.y + 1.3) continue;
+                index.push(cur, cur + 1, next, cur + 1, next + 1, next);
+                capIndex.push(cur, next, cur + 1, cur + 1, next, next + 1);
+            }
+            if (!index.length) continue;
+            const wall = new THREE.BufferGeometry();
+            wall.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            wall.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            wall.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            wall.setIndex(index);
+            const mesh = new THREE.Mesh(wall, this.materials.barrier);
+            mesh.name = `${this.spline.circuitId}-retaining-wall-${side}`;
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            this.group.add(mesh);
+            const cap = new THREE.BufferGeometry();
+            cap.setAttribute('position', new THREE.Float32BufferAttribute(capPositions, 3));
+            cap.setIndex(capIndex); cap.computeVertexNormals();
+            const capMesh = new THREE.Mesh(cap, this.materials.barrier);
+            capMesh.name = `${this.spline.circuitId}-retaining-wall-cap-${side}`;
+            capMesh.material.side = THREE.DoubleSide;
+            this.group.add(capMesh);
+        }
     }
     private buildBarriers(): void {
         {

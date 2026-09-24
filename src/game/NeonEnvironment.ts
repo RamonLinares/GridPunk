@@ -282,7 +282,8 @@ export function createNeonEnvironment(scene: THREE.Scene, builder: TrackBuilder,
     portal.position.copy(s.position);portal.rotation.y=Math.atan2(s.tangent.x,s.tangent.z);group.add(portal);
     const part=(mat:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number)=>{const m=new THREE.Mesh(box,mat);m.position.set(x,y,z);m.scale.set(w,h,d);portal.add(m);};
     part(metal,0,19,0,110,2,7);part(glow[j%2],0,17.9,-3.55,108,.12,.12);
-    for(const side of [-1,1]){part(concrete,side*15,8.5,0,2,17,3);part(glow[j%2],side*13.9,8.5,-1.55,.12,16,.1);}
+    const footing=hilly?12:0;
+    for(const side of [-1,1]){part(concrete,side*15,8.5-footing/2,0,2,17+footing,3);part(glow[j%2],side*13.9,8.5,-1.55,.12,16,.1);}
     const train=new THREE.Group();train.name='neon-skytrain';train.userData.intentionalOverpass=true;group.add(train);
     for(let k=0;k<3;k++){const body=new THREE.Mesh(box,metal);body.scale.set(13,3.2,4.2);body.position.x=k*14;train.add(body);const window=new THREE.Mesh(box,glow[0]);window.scale.set(11,1.3,.1);window.position.set(k*14,.4,-2.2);train.add(window);}
     train.rotation.y=portal.rotation.y;trains.push({mesh:train,center:s.position.clone().add(new THREE.Vector3(0,22,0)),right:new THREE.Vector3(Math.cos(portal.rotation.y),0,-Math.sin(portal.rotation.y)),phase:j*.31});

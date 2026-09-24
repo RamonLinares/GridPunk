@@ -216,7 +216,7 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
     for (const side of [-1, 1]) {
       const p = s.position.clone().addScaledVector(s.right, side * 15.5);
       if (clearance(p.x, p.z) < 14.5) continue;
-      const local = localKit(p.x, p.z, angle), ground = spline.circuit.layout === 'neon' ? 0 : s.position.y;
+      const local = localKit(p.x, p.z, angle), ground = spline.circuit.terrainFollow ? 0 : spline.circuit.layout === 'neon' ? 0 : s.position.y;
       local(cylinder, m.iron, 0, ground + 3.5, 0, .15, 7, .15);
       local(cone, m.iron, 0, ground + 7.9, 0, .65, .7, .65);
       local(box, m.lamp, 0, ground + 7.15, 0, .7, .9, .7);
@@ -235,7 +235,8 @@ export function createSteamEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const o = new THREE.Mesh(geo, mat); o.position.fromArray(p); o.scale.fromArray(scale); o.rotation.set(rotation[0], rotation[1], rotation[2]); o.castShadow = true; bridge.add(o);
     };
     for (const side of [-1, 1]) {
-      mesh(box, m.iron, [side * 18, 7, 0], [1, 14, 2.8]);
+      const footing = spline.circuit.terrainFollow ? 12 : 0;
+      mesh(box, m.iron, [side * 18, 7 - footing / 2, 0], [1, 14 + footing, 2.8]);
       mesh(box, m.iron, [0, 14, side * 1.3], [37, 1.4, .4]);
       mesh(cylinder, m.copper, [0, 16, side * .7], [.7, 38, .7], [0, 0, Math.PI / 2]);
       for (let x = -16; x <= 16; x += 4) mesh(box, m.brass, [x, 15, side * 1.4], [4.2, .15, .15], [0, 0, x % 8 ? .55 : -.55]);

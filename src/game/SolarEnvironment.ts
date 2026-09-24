@@ -240,7 +240,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   for (const corner of stands) {
     if (liftAt(corner.apexIndex / spline.count) > .3) continue;
     const stand = createSolarGrandstand(spline.sampleAt(corner.apexIndex),
-      corner.direction === 'left' ? 1 : -1, standClearance, 4111 + corner.number);
+      corner.direction === 'left' ? 1 : -1, standClearance, 4111 + corner.number, spline.circuit.terrainFollow ? (x, z, radius) => builder.groundAt(x, z, radius) : undefined);
     if (!stand) continue;
     grandstands.push(stand); occupied.push(stand.footprint); group.add(stand.group);
   }
@@ -294,8 +294,14 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const a = k / 16 * Math.PI * 2 + rand() * .4, r = 340 + rand() * 440;
     addTower(centre.x + Math.cos(a) * r, centre.z + Math.sin(a) * r, 22 + rand() * 10, 80 + rand() * 110);
   }
-  for (let x = -950; x <= 950; x += 68) for (let z = -950; z <= 1000; z += 68) {
+  // Imported layouts reach beyond the original ±950 m city; follow the track.
+  const wide = !!spline.circuit.terrainFollow;
+  const cityX0 = wide ? Math.min(-950, Math.floor((bounds.min.x - 300) / 68) * 68) : -950, cityX1 = wide ? Math.max(950, bounds.max.x + 300) : 950;
+  const cityZ0 = wide ? Math.min(-950, Math.floor((bounds.min.z - 300) / 68) * 68) : -950, cityZ1 = wide ? Math.max(1000, bounds.max.z + 300) : 1000;
+  for (let x = cityX0; x <= cityX1; x += 68) for (let z = cityZ0; z <= cityZ1; z += 68) {
     const px = x + (rand() - .5) * 20, pz = z + (rand() - .5) * 20;
+    // Outside the original city square, only the blocks the track can see.
+    if (wide && (Math.abs(px) > 950 || pz < -950 || pz > 1000) && builder.distanceToTrack(px, pz) > 200) continue;
     addBuilding(px, pz, 24 + rand() * 24, 24 + rand() * 24, 16 + Math.pow(rand(), 2) * 70, 0, false);
   }
 
@@ -306,7 +312,8 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     if (lift > .3) continue;
     for (const side of [-1, 1]) {
       const h = s.position.clone().addScaledVector(s.right, side * 13.3), g = builder.groundAt(h.x, h.z);
-      block(concrete, h.x, .38 + g, h.z, 1.2, .76, sampleStep * 2 + .15, angle);
+      const sink = spline.circuit.terrainFollow ? 1.6 : 0;
+      block(concrete, h.x, .38 + g - sink / 2, h.z, 1.2, .76 + sink, sampleStep * 2 + .15, angle);
       for (let along=-sampleStep;along<sampleStep;along+=1.6) {
         const shrubPoint=h.clone().addScaledVector(s.tangent,along);
         vegetation.shrub(shrubPoint.x, .9 + g, shrubPoint.z, 1.15);
@@ -340,7 +347,8 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
     const s = spline.sampleAt(i), side = Math.floor(i / 13) % 2 ? 1 : -1, angle = Math.atan2(s.tangent.x, s.tangent.z);
     const p = s.position.clone().addScaledVector(s.right, side * 14.7);
     if (builder.distanceToTrack(p.x, p.z) < 14.3) continue;
-    block(pole, p.x, p.y + 3.7, p.z, .12, 7.4, .12);
+    const poleFoot = spline.circuit.terrainFollow ? Math.min(p.y, builder.groundAt(p.x, p.z)) : p.y;
+    block(pole, p.x, (poleFoot + p.y + 7.4) / 2, p.z, .12, p.y + 7.4 - poleFoot, .12);
     block(pole, p.x, p.y + 7.3, p.z, .08, .08, 1.6, angle);
     dummy.position.copy(p).addScaledVector(s.tangent, .7).add(new THREE.Vector3(0, 5.4, 0)); dummy.rotation.set(0, angle, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
     flagMatrices.push(dummy.matrix.clone());
@@ -358,7 +366,7 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
   }
   // Park trees in the gaps between blocks.
   for (let k = 0; k < 1100; k++) {
-    const x = (rand() - .5) * 1900, z = (rand() - .5) * 1900;
+    const x = wide ? THREE.MathUtils.lerp(cityX0, cityX1, rand()) : (rand() - .5) * 1900, z = wide ? THREE.MathUtils.lerp(cityZ0, cityZ1, rand()) : (rand() - .5) * 1900;
     if (builder.distanceToTrack(x, z) < 22) continue;
     if (landmarkViewReserved(x, z, 3)) continue;
     if (occupied.some(o => Math.hypot(x - o.x, z - o.z) < o.r + 3)) continue;
@@ -399,8 +407,9 @@ export function createSolarEnvironment(scene: THREE.Scene, builder: TrackBuilder
       const mesh=new THREE.Mesh(box,mat);mesh.position.set(x,y,z);mesh.scale.set(w,h,d);mesh.castShadow=true;mesh.receiveShadow=true;bridge.add(mesh);
     };
     part(plaster,0,10.3,0,39,.65,5.2);
+    const pier = spline.circuit.terrainFollow ? 12 : 0;
     for(const side of [-1,1]) {
-      part(plaster,side*18.5,5,0,1.1,10,3);
+      part(plaster,side*18.5,5-pier/2,0,1.1,10+pier,3);
       part(glass,0,11.15,side*2.4,38,.9,.10);
       part(frame,0,11.7,side*2.4,39,.09,.09);
       part(concrete,0,10.95,side*2.1,38,.5,.7);

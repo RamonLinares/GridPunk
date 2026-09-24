@@ -41,6 +41,8 @@ export function createSolarGrandstand(
   side: number,
   distanceToTrack: (x: number, z: number) => number,
   seed = 1,
+  /** Hilly layouts: the stand sits on the lowest ground under its footprint. */
+  groundAt?: (x: number, z: number, radius: number) => number,
 ): SolarGrandstand | null {
   const away = sample.right.clone().multiplyScalar(side).setY(0).normalize();
   const along = new THREE.Vector3(away.z, 0, -away.x);
@@ -64,6 +66,7 @@ export function createSolarGrandstand(
   const group = new THREE.Group();
   group.name = 'solar-grandstand';
   group.position.copy(origin);
+  if (groundAt) group.position.y = groundAt(origin.x + away.x * DEPTH / 2, origin.z + away.z * DEPTH / 2, Math.hypot(WIDTH, DEPTH) / 2);
   group.rotation.y = Math.atan2(away.x, away.z);
   group.userData.roadClearanceVerified = true;
   group.userData.preserveAuthoredElevation = true;

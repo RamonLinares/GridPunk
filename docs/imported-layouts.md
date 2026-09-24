@@ -17,4 +17,17 @@ Six more layouts are raced in all three stages (Cyberpunk, Solarpunk, Steampunk)
 
 ## Cities on hills
 
-These circuits set `terrainFollow`. `TrackBuilder` builds a 16 m height field instead of the flat city floor: within 26 m of the centreline the ground sits just below the road's lowest banked edge, blends over 90 m into a smooth field interpolated from the whole lap, and eases to a level plain at the grid edge. `builder.groundAt(x, z, radius)` returns the lowest terrain point under a footprint (0 on flat circuits). Every stage seats its buildings, landmarks, trees, lamps, street furniture and far ranges with it, so buildings cut into slopes instead of floating. Solarpunk's sea-level bay is omitted on hilly layouts. Neon District and Kairo keep their flat city unchanged.
+These circuits set `terrainFollow`, and `TrackBuilder` builds a 12 m height field instead of the flat city floor:
+
+- **Near the road.** Within 32 m of the centreline the ground sits just below the road's lowest banked edge, then blends over 120 m into a local field. The local field is a Gaussian blend of nearby road heights, clamped to 1-in-4 slope cones from every road sample, so it never climbs into a cliff beside a lower road.
+- **Carving.** Every grid vertex of a cell the road or its 16 m verge touches is carved below that road point, so the terrain can never cover the road, including on banking and where sections pass close by.
+- **Edges.** The height field eases to a level plain at the grid edge. The plain is a frame around the grid, never a sheet through it.
+- **Steep faces.** Slopes steeper than about 1 in 3 are shaded as coursed masonry.
+
+Where a higher section of the lap passes close by, the barrier continues up as a capped **retaining wall** to the top of the rise. Barrier walls also reach down to the ground wherever the road is above it.
+
+`builder.groundAt(x, z, radius)` returns the exact lowest terrain vertex under a footprint's bounding square, minus 0.3 m (0 on flat circuits). Every stage uses it to seat buildings, landmarks, grandstands, trees, lamps, flags, pavement props, verges and street furniture, so buildings cut into slopes instead of floating. Gantry, portal and skybridge legs extend below grade. Solarpunk's sea-level bay is omitted on hilly layouts, and its city fills in only near the track beyond the original ±950 m square. The follow camera is clamped above the terrain. Neon District and Kairo keep their flat city unchanged.
+
+### Verification
+
+Every one of the 18 races was checked for terrain or scenery above the road surface: 0 terrain intrusions, and the only scenery hits are intended (grade-separated crossings, tree canopies). All 18 laps were reviewed from the driving camera at 20 points each, with aerial checks at the steepest climbs. Six-car AI races complete two valid laps with no wall hits on all six layouts. Scene totals match the committed versions on Neon and Kairo; hilly Solarpunk layouts that now have city cover add 4–10%.
